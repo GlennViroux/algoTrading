@@ -7,14 +7,23 @@ import matplotlib.pyplot as _plt
 import pandas as _pd
 from trade_logic import Stocks
 import utils
-
+import threading
+import server
 
 STARTING_BALANCE=10000
 stocks=Stocks(STARTING_BALANCE)
-OUTPUT_DIR_LOG="./output/ALGO_TRADING_LOG_{}.txt".format(utils.date_now_filename())
-OUTPUT_DIR_PLOTS="./output/plots"
+OUTPUT_DIR="./output/"
+OUTPUT_DIR_LOG=OUTPUT_DIR+"ALGO_TRADING_LOG_{}.txt".format(utils.date_now_filename())
+OUTPUT_DIR_PLOTS=OUTPUT_DIR+"plots"
 
-utils.mkdir_p(OUTPUT_DIR_PLOTS)
+# Clean output directory
+utils.clean_output(OUTPUT_DIR,OUTPUT_DIR_PLOTS)
+
+# Get server running in daemon thread
+s=threading.Thread(target=server.start,args=(),daemon=True)
+s.start()
+
+
 ronde=-1
 while True:
     ronde+=1

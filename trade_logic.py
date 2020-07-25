@@ -87,7 +87,7 @@ class Stocks:
             timestamps_list=EMA_dict['timestamps']
             EMA_list=EMA_dict['EMA']
             last_EMA=EMA_df.iloc[-1]['EMA']
-        except RuntimeError:
+        except:
             return _pd.DataFrame()
         
         bid_and_ask=yahooscraper.get_bid_and_ask(ticker)
@@ -219,6 +219,12 @@ class Stocks:
                 utils.write_output_formatted(ERROR_MODE,"When getting bid and ask prices, no valid response was received from the Yahoo Finance website for the {} stock.".format(gainer),output_dir_log)
                 return False
 
+            try:
+                data=alpha.last_data(ALPHA_INTRADAY_INTERVAL,outputsize='full')
+            except:
+                utils.write_output_formatted(ERROR_MODE,"When getting last data, no valid response was received from the AlphaVantage API for the {} stock.".format(gainer),output_dir_log)
+                return False
+
             bid_price=bid_and_ask['bid']
             ask_price=bid_and_ask['ask']
             stocks_to_buy=round(float(MONEY_TO_SPEND/ask_price),3)
@@ -227,7 +233,7 @@ class Stocks:
             utils.write_output_formatted(MODE,"Buying {} stocks from {} ({}) for ${}".format(stocks_to_buy,gainer,name,round(stocks_to_buy*ask_price,3)),output_dir_log)
 
             # Save historic stock data for plotting purposes
-            data=alpha.last_data(ALPHA_INTRADAY_INTERVAL,outputsize='full')
+            
             self.update_bought_stock_data_buying(gainer,data,df_EMA_20,df_EMA_200,bid_price,ask_price,EMA_20,EMA_200)
 
         else:
@@ -274,8 +280,8 @@ class Stocks:
             # Check whether we want to sell the stock
             alpha=Alpha(stock,APIKEY)
 
-            EMA_200=self.get_EMA(scraper,alpha,stock,'daily',200)
-            EMA_20=self.get_EMA(scraper,alpha,stock,'daily',20)
+            EMA_200=self.get_EMA(scraper,alpha,stock,ALPHA_EMA_INTERVAL,200)
+            EMA_20=self.get_EMA(scraper,alpha,stock,ALPHA_EMA_INTERVAL,20)
 
             if not EMA_20 or not EMA_200:
                 utils.write_output_formatted(ERROR_MODE,"EMA check (no valid response was received from the AlphaVantage API or Yahoo Finance website for the {} stock.".format(stock),output_dir_log)

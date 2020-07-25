@@ -4,6 +4,7 @@
 import datetime as _datetime
 import glob
 import os,os.path
+import shutil
 import errno
 
 def date_now():
@@ -99,10 +100,14 @@ def safe_write(data,path,option):
 
 def get_latest_log():
     list_of_files=glob.glob('./output/ALGO_TRADING_LOG*')
+    if not list_of_files:
+        return None
     return max(list_of_files, key=os.path.getctime)
 
 def get_plot(ticker):
     list_of_files=glob.glob('./output/plots/*{}.png'.format(ticker.upper()))
+    if not list_of_files:
+        return None
     return max(list_of_files, key=os.path.getctime)
 
 def receive_chunks(conn,size):
@@ -124,3 +129,19 @@ def send_chunks(conn,data):
         if sent==0:
             raise RuntimeError("Socket connection broken.")
         totalsent+=sent   
+
+def clean_output(output_dir,output_dir_plots):
+    '''
+    This function cleans the output directory (log+output plots).
+    '''
+    for filename in os.listdir(output_dir):
+        file_path = os.path.join(output_dir, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+    mkdir_p(output_dir_plots)

@@ -4,8 +4,6 @@ import utils
 import glob
 import os
 
-LOGPATH=utils.get_latest_log()
-
 SERVER = socket.gethostbyname(socket.gethostname())
 PORT = 5050
 ADDR = (SERVER,PORT)
@@ -16,10 +14,6 @@ DISCONNECT_MSG="!DISCONNECT"
 CONFIRMATION_MSG="Message received."
 SERVER_OUTPUT_DIR_LOG="./output/SERVER_LOG_{}.txt".format(utils.date_now_filename())
 MODE="SERVER"
-
-server=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-#server.close()
-server.bind(ADDR)
 
 def handle_client(conn,addr):
     utils.write_output_formatted(MODE,f"[NEW CONNECTION] {addr} connected.",SERVER_OUTPUT_DIR_LOG)
@@ -57,30 +51,55 @@ def handle_client(conn,addr):
 
             elif msg_cat=="REQUEST":
                 if msg_type=="LOG":
-                    with open(LOGPATH,'rb') as f:
-                        logdata=f.read()
+                    logpath=utils.get_latest_log()
 
-                    logdata_size=str(len(logdata)).encode(FORMAT)
-                    logdata_size += b' ' * (HEADER-len(logdata_size))
-                    conn.send(logdata_size)
-                    utils.send_chunks(conn,logdata)
-                    utils.write_output_formatted(MODE,"Sent log file {}".format(LOGPATH),SERVER_OUTPUT_DIR_LOG)
+                    if logpath:
+                        msg="True"
+                        msg_send=b' '*(HEADER-len(msg))+msg.encode(FORMAT)
+                        conn.send(msg_send)
+
+                        with open(logpath,'rb') as f:
+                            logdata=f.read()
+
+                        logdata_size=str(len(logdata)).encode(FORMAT)
+                        logdata_size += b' ' * (HEADER-len(logdata_size))
+                        conn.send(logdata_size)
+                        utils.send_chunks(conn,logdata)
+                        utils.write_output_formatted(MODE,"Sent log file {}".format(logpath),SERVER_OUTPUT_DIR_LOG)
+                    else:
+                        msg="False"
+                        msg_send=b' '*(HEADER-len(msg))+msg.encode(FORMAT)
+                        conn.send(msg_send)
 
                 elif msg_type=="PLOT":
                     ticker=header_elems[2].strip()
-                    with open(utils.get_plot(ticker),'rb') as f:
-                        plotdata=f.read()
+                    plot=utils.get_plot(ticker)
 
-                    plotdata_size=str(len(plotdata)).encode(FORMAT)
-                    plotdata_size += b' ' * (HEADER-len(plotdata_size))
-                    conn.send(plotdata_size)
-                    utils.send_chunks(conn,plotdata)
-                    utils.write_output_formatted(MODE,"Sent plot {}".format(utils.get_plot(ticker)),SERVER_OUTPUT_DIR_LOG)            
+                    if plot:
+                        msg="True"
+                        msg_send=b' '*(HEADER-len(msg))+msg.encode(FORMAT)
+                        conn.send(msg_send)
+                        with open(plot,'rb') as f:
+                            plotdata=f.read()
+
+                        plotdata_size=str(len(plotdata)).encode(FORMAT)
+                        plotdata_size += b' ' * (HEADER-len(plotdata_size))
+                        conn.send(plotdata_size)
+                        utils.send_chunks(conn,plotdata)
+                        utils.write_output_formatted(MODE,"Sent plot {}".format(utils.get_plot(ticker)),SERVER_OUTPUT_DIR_LOG)            
+                    else:
+                        msg="False"
+                        msg_send=b' '*(HEADER-len(msg))+msg.encode(FORMAT)
+                        conn.send(msg_send)
+
 
     utils.write_output_formatted(MODE,f"Closing connection with {addr}.",SERVER_OUTPUT_DIR_LOG)      
     conn.close()
 
 def start():
+    utils.write_output_formatted(MODE,f"Server {SERVER} is starting...",SERVER_OUTPUT_DIR_LOG)
+    server=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    server.bind(ADDR)
     server.listen()
     utils.write_output_formatted(MODE,f"Server is listening on {SERVER}",SERVER_OUTPUT_DIR_LOG) 
 
@@ -89,7 +108,3 @@ def start():
         thread = threading.Thread(target=handle_client,args=(conn,addr))
         thread.start()
         utils.write_output_formatted(MODE,f"Active connections: {threading.activeCount()-1}",SERVER_OUTPUT_DIR_LOG)
-
-
-utils.write_output_formatted(MODE,f"Server {SERVER} is starting...",SERVER_OUTPUT_DIR_LOG)
-start()

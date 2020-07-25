@@ -22,6 +22,7 @@ class YahooScraper:
             return None
 
         if not req.status_code==200:
+            print("Wrong status code.")
             print(req.status_code)
             print(req.text)
             return None
@@ -31,9 +32,13 @@ class YahooScraper:
         bid_tag=soep.find(text="Bid")
         ask_tag=soep.find(text="Ask")
 
+        try:
+            bids=[yahoo_float(i) for i in bid_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
+            asks=[yahoo_float(i) for i in ask_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
+        except:
+            print("Error in calling get_text() function.")
+            return None
 
-        bids=[yahoo_float(i) for i in bid_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
-        asks=[yahoo_float(i) for i in ask_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
         result['bid']=bids[0]
         result['bid_volume']=bids[1]
         result['ask']=asks[0]
