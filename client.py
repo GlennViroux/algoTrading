@@ -1,7 +1,7 @@
 import socket
 import utils
 
-SERVER="192.168.0.21"
+SERVER="YOURIP"
 PORT=5050
 ADDR=(SERVER,PORT)
 
