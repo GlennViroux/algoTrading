@@ -134,6 +134,9 @@ def clean_output(output_dir,output_dir_plots):
     '''
     This function cleans the output directory (log+output plots).
     '''
+    if not os.path.isdir(output_dir):
+        mkdir_p(output_dir)
+
     for filename in os.listdir(output_dir):
         file_path = os.path.join(output_dir, filename)
         try:
