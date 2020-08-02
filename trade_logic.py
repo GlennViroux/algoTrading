@@ -16,7 +16,7 @@ import matplotlib.dates as mdates
 ERROR_MODE="ERROR"
 APIKEY="KOB33KN2G0O9X8SX"
 MAX_TIME_DIFF=_datetime.timedelta(days=6)
-MAX_STOCKS=5
+MAX_STOCKS=10
 PREV_STOCKS_CHECKED=15
 MONEY_TO_SPEND=500
 ALPHA_INTRADAY_INTERVAL='5min'
@@ -24,7 +24,11 @@ ALPHA_EMA_INTERVAL='5min'
 
 
 class Stocks:
-    def __init__(self,balance,current_stocks={},previously_checked_stocks=[],bought_stock_data={'ticker':[],'timestamps':[],'bid':[],'ask':[],'bought':[],'EMA_small':[],'EMA_big':[]}):
+    def __init__(self,
+                balance,current_stocks={},
+                previously_checked_stocks=[],
+                bought_stock_data={'ticker':[],'timestamps':[],'bid':[],'ask':[],'bought':[],'EMA_small':[],'EMA_big':[]},
+                current_status={}):
         '''
         balance : current balance. I.e. money in account ready to spend.
         virtual balance : Money that would be in account if we would sell everything now at the current bidding prices.
@@ -32,12 +36,27 @@ class Stocks:
         previously checked stocks : list of last stocks we looked into whether they were worth buying or not
         bought stock data : dictionary (for dataframe) with the following columns:
             ticker | timestamp | bid (=open) | ask (=open) | EMA_small | EMA_big | bought (1/0) 
+        current status : 
+            {'ticker': 
+                {
+                "fullname": ""
+                "number": ""
+                "value_bought" : ""
+                "value_current" : ""
+                "value_sold" : ""
+                "virtual_result" : ""
+                "final_result" : ""
+                "timestamp_bought" : ""
+                "timestamp_sold" : ""
+                }
+            }   
         '''
         self.balance=balance
         self.virtual_total=balance
         self.current_stocks=current_stocks
         self.previously_checked_stocks=previously_checked_stocks
         self.bought_stock_data=bought_stock_data
+        self.current_status=current_status
 
     @property
     def get_balance(self):
@@ -153,7 +172,6 @@ class Stocks:
         self.bought_stock_data['EMA_big'].append(EMA_big)
 
 
-
     def check_to_buy(self,output_dir_log):
         '''
         This function checks out the highest gainer and whether 
@@ -228,6 +246,15 @@ class Stocks:
             bid_price=bid_and_ask['bid']
             ask_price=bid_and_ask['ask']
             stocks_to_buy=round(float(MONEY_TO_SPEND/ask_price),3)
+            self.current_status[gainer]={"fullname":name,
+                                        "number":stocks_to_buy,
+                                        "value_bought":str(round(stocks_to_buy*ask_price,3)),
+                                        "value_current":str(round(stocks_to_buy*ask_price,3)),
+                                        "value_sold":"-",
+                                        "virtual_result":"-",
+                                        "final_result":"-",
+                                        "timestamp_bought":utils.date_now(),
+                                        "timestamp_sold":"-"}
             self.balance-=stocks_to_buy*ask_price
             self.current_stocks[gainer]=(stocks_to_buy,round(ask_price*stocks_to_buy,3))
             utils.write_output_formatted(MODE,"Buying {} stocks from {} ({}) for ${}".format(stocks_to_buy,gainer,name,round(stocks_to_buy*ask_price,3)),output_dir_log)
@@ -311,12 +338,18 @@ class Stocks:
             self.bought_stock_data['EMA_small'].append(EMA_20)
             self.bought_stock_data['EMA_big'].append(EMA_200)
 
+            self.current_status[stock]["value_current"]=str(round(self.current_status[stock]["number"]*ask_price,3))
+            self.current_status[stock]["virtual_result"]=str(round((float(self.current_status[stock]["value_current"])-float(self.current_status[stock]["value_bought"]))*number,3))
+
             if flag:
                 # Sell all stocks of the stock we're looking at
                 self.current_stocks.pop(stock)
                 self.balance+=(number*bid_price)
                 self.virtual_total+=(number*bid_price)
                 self.bought_stock_data['bought'].append(0)
+                self.current_status[stock]["value_sold"]=str(round(number*bid_price,3))
+                self.current_status[stock]["final_result"]=str(round((float(self.current_status[stock]["value_result"])-float(self.current_status[stock]["value_bought"]))*number,3))
+                self.current_status[stock]["timestamp_sold"]=utils.date_now()
                 utils.write_output_formatted(MODE,"Selling {} stocks from {} for ${}".format(number,stock,number*bid_price),output_dir_log)
             else:
                 # Update historic plot data for plotting purposes

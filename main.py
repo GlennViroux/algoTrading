@@ -15,19 +15,21 @@ stocks=Stocks(STARTING_BALANCE)
 OUTPUT_DIR="./output/"
 OUTPUT_DIR_LOG=OUTPUT_DIR+"ALGO_TRADING_LOG_{}.txt".format(utils.date_now_filename())
 OUTPUT_DIR_PLOTS=OUTPUT_DIR+"plots"
+OUTPUT_DIR_STATUS=OUTPUT_DIR+"ALGO_STATUS_LOG_{}.txt".format(utils.date_now_filename())
 
 # Clean output directory
 utils.clean_output(OUTPUT_DIR,OUTPUT_DIR_PLOTS)
 
 # Get server running in daemon thread
-s=threading.Thread(target=server.start,args=(),daemon=True)
-s.start()
+#s=threading.Thread(target=server.start,args=(),daemon=True)
+#s.start()
 
 
 ronde=-1
 while True:
     ronde+=1
     MODE="STATUS INFORMATION   -:-"
+    utils.write_status(stocks.current_status,OUTPUT_DIR_STATUS)
     utils.write_output("-"*220,OUTPUT_DIR_LOG)
     utils.write_output_formatted(MODE,"Current Balance: ${}".format(stocks.balance),OUTPUT_DIR_LOG)
 
@@ -37,7 +39,7 @@ while True:
     stocks.plot_bought_stock_data(OUTPUT_DIR_PLOTS)
 
     if not bool(stocks.current_stocks):
-        utils.write_output_formatted(MODE,"Currently no stocks are in posession.",OUTPUT_DIR_LOG)
+        utils.write_output_formatted(MODE,"Currently no stocks are in possession.",OUTPUT_DIR_LOG)
     else:
         utils.write_output_formatted(MODE,"Stocks in posession: {}".format(utils.write_stocks(stocks.current_stocks)),OUTPUT_DIR_LOG)
 

@@ -6,6 +6,7 @@ import glob
 import os,os.path
 import shutil
 import errno
+import json
 
 def date_now():
     return _datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
@@ -76,6 +77,16 @@ def write_output(line,path):
             f.write(line+'\n')
     except:
         f.write("Failed to safely open the output log file, nothing was written.\n")
+
+def write_status(current_status,path):
+    '''
+    This function writes the current status in JSON format.
+    '''
+    try:
+        with safe_open_w(path) as f:
+            f.write(json.dumps(current_status,indent=2))
+    except:
+        print("Failed to safely open the output status file, nothing was written.\n")
         
 def write_output_formatted(mode,text,path):
     '''
@@ -85,7 +96,7 @@ def write_output_formatted(mode,text,path):
         with safe_open_a(path) as f:
             f.write("{} -:- {:22} {}".format(date_now(),mode,text)+'\n')
     except:
-        f.write("Failed to safely open the output log file, nothing was written.\n")
+        print("Failed to safely open the output log file, nothing was written.\n")
 
 def safe_write(data,path,option):
     '''
@@ -100,6 +111,12 @@ def safe_write(data,path,option):
 
 def get_latest_log():
     list_of_files=glob.glob('./output/ALGO_TRADING_LOG*')
+    if not list_of_files:
+        return None
+    return max(list_of_files, key=os.path.getctime)
+
+def get_status_log():
+    list_of_files=glob.glob('./output/ALGO_STATUS_LOG*')
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)
