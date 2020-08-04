@@ -6,9 +6,10 @@ import datetime as _datetime
 import matplotlib.pyplot as _plt
 import pandas as _pd
 from trade_logic import Stocks
+import main_restful_api
 import utils
 import threading
-import server
+
 
 STARTING_BALANCE=10000
 stocks=Stocks(STARTING_BALANCE)
@@ -16,20 +17,21 @@ OUTPUT_DIR="./output/"
 OUTPUT_DIR_LOG=OUTPUT_DIR+"ALGO_TRADING_LOG_{}.txt".format(utils.date_now_filename())
 OUTPUT_DIR_PLOTS=OUTPUT_DIR+"plots"
 OUTPUT_DIR_STATUS=OUTPUT_DIR+"ALGO_STATUS_LOG_{}.txt".format(utils.date_now_filename())
+OUTPUT_DIR_PLOTDATA=OUTPUT_DIR+"ALGO_PLOTDATA_LOG_{}.txt".format(utils.date_now_filename())
 
 # Clean output directory
 utils.clean_output(OUTPUT_DIR,OUTPUT_DIR_PLOTS)
 
 # Get server running in daemon thread
-#s=threading.Thread(target=server.start,args=(),daemon=True)
-#s.start()
-
+s=threading.Thread(target=main_restful_api.start,args=(),daemon=True)
+s.start()
 
 ronde=-1
 while True:
     ronde+=1
     MODE="STATUS INFORMATION   -:-"
     utils.write_status(stocks.current_status,OUTPUT_DIR_STATUS)
+    utils.write_plotdata(stocks.bought_stock_data,OUTPUT_DIR_PLOTDATA)
     utils.write_output("-"*220,OUTPUT_DIR_LOG)
     utils.write_output_formatted(MODE,"Current Balance: ${}".format(stocks.balance),OUTPUT_DIR_LOG)
 

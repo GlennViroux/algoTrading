@@ -4,8 +4,7 @@ import utils
 import os.path
 import json
 
-app=Flask(__name__)
-api=Api(app)
+
 
 class Plot(Resource):
     def get(self,ticker):
@@ -35,9 +34,22 @@ class Status(Resource):
         filename=os.path.basename(statuspath)
         return send_from_directory(dirname,filename,attachment_filename=filename)
 
-api.add_resource(Plot,"/plots/<string:ticker>")
-api.add_resource(Log,"/log/")
-api.add_resource(Status,"/status/")
+class PlotData(Resource):
+    def get(self):
+        plotdatapath=utils.get_plotdata_log()
+        if plotdatapath==None:
+            abort(404,message="No plotdata log exists.")
+        dirname=os.path.dirname(plotdatapath)
+        filename=os.path.basename(plotdatapath)
+        return send_from_directory(dirname,filename,attachment_filename=filename)
 
-if __name__=="__main__":
-    app.run(debug=True,host='192.168.1.37',port=5050)
+def start():
+    app=Flask(__name__)
+    api=Api(app)
+
+    api.add_resource(Plot,"/plots/<string:ticker>")
+    api.add_resource(Log,"/log/")
+    api.add_resource(Status,"/status/")
+    api.add_resource(PlotData,"/plotdata/")
+
+    app.run(debug=False,host='192.168.1.37',port=5050)

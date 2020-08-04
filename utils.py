@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import datetime as _datetime
+import pandas as _pd
 import glob
 import os,os.path
 import shutil
@@ -87,6 +88,31 @@ def write_status(current_status,path):
             f.write(json.dumps(current_status,indent=2))
     except:
         print("Failed to safely open the output status file, nothing was written.\n")
+
+def write_plotdata(bought_stocks_data,path):
+    '''
+    This function writes the current plotdata in JSON format.
+    '''
+    df=_pd.DataFrame(bought_stocks_data)
+    result={}
+    for ticker in _pd.unique(df.ticker):
+        df_ticker=df[df['ticker']==ticker]
+        result[ticker]={}
+        for timestamp in df_ticker.timestamps:
+            df_timestamp=df_ticker[df['timestamps']==timestamp]
+            new_dict = {'bid':str(df_timestamp.bid.iloc[0]),
+                        'ask':str(df_timestamp.ask.iloc[0]),
+                        'bought':str(df_timestamp.bought.iloc[0]),
+                        'EMA_small':str(df_timestamp.EMA_small.iloc[0]),
+                        'EMA_big':str(df_timestamp.EMA_big.iloc[0])}
+
+            result[ticker][str(timestamp)]=new_dict
+
+    try:
+        with safe_open_w(path) as f:
+            f.write(json.dumps(result,indent=2))
+    except:
+        print("Failed to safely open the output plotdata file, nothing was written.\n")
         
 def write_output_formatted(mode,text,path):
     '''
@@ -117,6 +143,12 @@ def get_latest_log():
 
 def get_status_log():
     list_of_files=glob.glob('./output/ALGO_STATUS_LOG*')
+    if not list_of_files:
+        return None
+    return max(list_of_files, key=os.path.getctime)
+
+def get_plotdata_log():
+    list_of_files=glob.glob('./output/ALGO_PLOTDATA_LOG*')
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)

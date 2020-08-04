@@ -19,13 +19,14 @@ MAX_TIME_DIFF=_datetime.timedelta(days=6)
 MAX_STOCKS=10
 PREV_STOCKS_CHECKED=15
 MONEY_TO_SPEND=500
-ALPHA_INTRADAY_INTERVAL='5min'
-ALPHA_EMA_INTERVAL='5min'
+ALPHA_INTRADAY_INTERVAL='30min'
+ALPHA_EMA_INTERVAL='30min'
 
 
 class Stocks:
     def __init__(self,
-                balance,current_stocks={},
+                balance,
+                current_stocks={},
                 previously_checked_stocks=[],
                 bought_stock_data={'ticker':[],'timestamps':[],'bid':[],'ask':[],'bought':[],'EMA_small':[],'EMA_big':[]},
                 current_status={}):
@@ -77,7 +78,6 @@ class Stocks:
     @property
     def get_bought_stock_data(self):
         return self.bought_stock_data
-
 
     def get_EMA(self,yahooscraper,alpha,ticker,interval,time_period):
         '''
