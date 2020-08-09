@@ -13,7 +13,8 @@ import numpy as _np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-ERROR_MODE="ERROR"
+ERROR_MODE="ERROR                -:-"
+HARDSELL_MODE="HARDSELL             -:-"
 APIKEY="KOB33KN2G0O9X8SX"
 MAX_TIME_DIFF=_datetime.timedelta(days=6)
 MAX_STOCKS=10
@@ -29,7 +30,8 @@ class Stocks:
                 current_stocks={},
                 previously_checked_stocks=[],
                 bought_stock_data={'ticker':[],'timestamps':[],'bid':[],'ask':[],'bought':[],'EMA_small':[],'EMA_big':[]},
-                current_status={}):
+                current_status={},
+                tosell={}):
         '''
         balance : current balance. I.e. money in account ready to spend.
         virtual balance : Money that would be in account if we would sell everything now at the current bidding prices.
@@ -51,6 +53,8 @@ class Stocks:
                 "timestamp_sold" : ""
                 }
             }   
+        tosell : 
+            {'tickers':['ticker1','ticker2',...]}
         '''
         self.balance=balance
         self.virtual_total=balance
@@ -58,6 +62,7 @@ class Stocks:
         self.previously_checked_stocks=previously_checked_stocks
         self.bought_stock_data=bought_stock_data
         self.current_status=current_status
+        self.tosell=tosell
 
     @property
     def get_balance(self):
@@ -78,6 +83,91 @@ class Stocks:
     @property
     def get_bought_stock_data(self):
         return self.bought_stock_data
+
+    def hard_sell_check(self,output_dir_log):
+        '''
+        This function checks whether the user has ordered to sell certain stocks using the app, 
+        and sells them. 
+        '''
+        if self.tosell:
+            remove_all_stocks=False
+            output_dir_tosell=utils.get_latest_log("TOSELL")
+            scraper=YahooScraper()
+            tickers=self.tosell['tickers']
+            if "ALLSTOCKS" in tickers:
+                remove_all_stocks=True
+                tickers=list(self.current_stocks.keys())
+            to_remove=[]
+            for ticker in tickers:
+                if not ticker in self.current_stocks:
+                    utils.write_output_formatted(HARDSELL_MODE,"Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),output_dir_log)
+                    to_remove.append(ticker)
+                    continue
+                    
+                number=self.current_stocks[ticker][0]
+                
+                bid_ask=scraper.get_bid_and_ask(ticker)
+                if not bid_ask:
+                    utils.write_output_formatted(HARDSELL_MODE,"When checking to sell: no valid response was received from the Yahoo Finance website for the {} stock. Selling all stocks for {}.".format(ticker,ticker),output_dir_log)
+                    bid_price=0
+                    ask_price=0
+                else:
+                    bid_price=bid_ask['bid']
+                    ask_price=bid_ask['ask']
+
+                utils.write_output_formatted(HARDSELL_MODE,"Selling {} stocks from {} for ${} ...".format(number,ticker,number*bid_price),output_dir_log)
+                    
+                self.bought_stock_data['ticker'].append(ticker)
+                self.bought_stock_data['timestamps'].append(_pd.Timestamp.now())
+                self.bought_stock_data['bid'].append(bid_price)
+                self.bought_stock_data['ask'].append(ask_price)
+                self.bought_stock_data['EMA_small'].append(_np.nan)
+                self.bought_stock_data['EMA_big'].append(_np.nan)
+
+                self.current_stocks.pop(ticker)
+                self.balance+=(number*bid_price)
+                self.bought_stock_data['bought'].append(0)
+                self.current_status[ticker]["value_sold"]=str(round(number*bid_price,3))
+                self.current_status[ticker]["final_result"]=str(round((float(self.current_status[ticker]["value_bought"])-float(self.current_status[ticker]["value_bought"]))*number,3))
+                self.current_status[ticker]["timestamp_sold"]=utils.date_now()
+
+                self.current_status[ticker]["value_current"]=str(round(self.current_status[ticker]["number"]*ask_price,3))
+                self.current_status[ticker]["virtual_result"]=str(round((float(self.current_status[ticker]["value_current"])-float(self.current_status[ticker]["value_bought"]))*number,3))
+
+                to_remove.append(ticker)
+                
+
+                utils.write_output_formatted(HARDSELL_MODE,"Sold {} stocks from {} for ${}".format(number,ticker,number*bid_price),output_dir_log)
+            
+            if remove_all_stocks:
+                self.tosell['tickers']=[]
+            else:
+                for ticker in to_remove:
+                    self.tosell['tickers'].remove(ticker)
+            utils.write_json(self.tosell,output_dir_tosell)
+
+
+    def get_overview(self):
+        '''
+        This function gets the total overview of the current status, in the following form:
+        {timestamp: {   'total_virtual_result':...,
+                        'total_final_result':...,
+                        'number_of_stocks_owned':...
+                    }
+        }
+        '''
+        total_final_result=0
+        total_virtual_result=0
+        number_of_stocks_owned=0
+        data=self.current_status
+        for key in data:
+            number_of_stocks_owned+=1
+            if data[key]['virtual_result']!="-" and data[key]['final_result']=="-":
+                total_virtual_result+=float(data[key]['virtual_result'])
+            elif data[key]['final_result']!="-":
+                total_final_result+=float(data[key]['final_result'])
+        result={'timestamp':utils.date_now(),'total_virtual_result':total_virtual_result,'total_final_result':total_final_result,'number_of_stocks_owned':number_of_stocks_owned}
+        return result
 
     def get_EMA(self,yahooscraper,alpha,ticker,interval,time_period):
         '''
@@ -345,10 +435,9 @@ class Stocks:
                 # Sell all stocks of the stock we're looking at
                 self.current_stocks.pop(stock)
                 self.balance+=(number*bid_price)
-                self.virtual_total+=(number*bid_price)
                 self.bought_stock_data['bought'].append(0)
                 self.current_status[stock]["value_sold"]=str(round(number*bid_price,3))
-                self.current_status[stock]["final_result"]=str(round((float(self.current_status[stock]["value_result"])-float(self.current_status[stock]["value_bought"]))*number,3))
+                self.current_status[stock]["final_result"]=str(round((float(self.current_status[stock]["value_bought"])-float(self.current_status[stock]["value_bought"]))*number,3))
                 self.current_status[stock]["timestamp_sold"]=utils.date_now()
                 utils.write_output_formatted(MODE,"Selling {} stocks from {} for ${}".format(number,stock,number*bid_price),output_dir_log)
             else:

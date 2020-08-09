@@ -9,20 +9,12 @@ import shutil
 import errno
 import json
 
+### LOG WRITING OPERATIONS ###
 def date_now():
     return _datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
 
 def date_now_filename():
     return _datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-
-def yahoo_float(string):
-    '''
-    This function reads a yahoo value and returns a float.
-    '''
-    if ("," in string) and ("." in string):
-        return float(string.replace(',',''))
-    else:
-        return float(string)
 
 def write_stocks(current_stocks):
     '''
@@ -39,6 +31,50 @@ def write_stocks(current_stocks):
         result+=stock+";"
     return result
 
+def write_output(line,path):
+    '''
+    This files writes a new line to the output file (log).
+    '''
+    try:
+        with safe_open(path,"a") as f:
+            f.write(line+'\n')
+    except:
+        f.write("Failed to safely open the output log file, nothing was written.\n")
+
+def safe_write(data,path,option):
+    '''
+    This files writes a new line to the output file (log).
+    '''
+    try:
+        with safe_open(path,option) as f:
+            f.write(data)
+    except:
+        print("UTILS: SAFE WRITE ERROR")
+        pass
+
+def write_output_formatted(mode,text,path):
+    '''
+    This files writes a new, formatted line to the output file (log).
+    '''
+    try:
+        with safe_open(path,"a") as f:
+            f.write("{} -:- {:22} {}".format(date_now(),mode,text)+'\n')
+    except:
+        print("Failed to safely open the output log file, nothing was written.\n")
+
+
+### YAHOO PARSING OPERATION ###
+def yahoo_float(string):
+    '''
+    This function reads a yahoo value and returns a float.
+    '''
+    if ("," in string) and ("." in string):
+        return float(string.replace(',',''))
+    else:
+        return float(string)
+
+
+### DIRECTORY OPERATIONS ###
 def mkdir_p(path):
     try:
         os.makedirs(path)
@@ -69,25 +105,16 @@ def safe_open_a(path):
     mkdir_p(os.path.dirname(path))
     return open(path,'a')
 
-def write_output(line,path):
+### WRITE DATA FOR API ###
+def write_json(data,path):
     '''
-    This files writes a new line to the output file (log).
-    '''
-    try:
-        with safe_open_a(path) as f:
-            f.write(line+'\n')
-    except:
-        f.write("Failed to safely open the output log file, nothing was written.\n")
-
-def write_status(current_status,path):
-    '''
-    This function writes the current status in JSON format.
+    This function writes the data (in dictionary format) in JSON format.
     '''
     try:
-        with safe_open_w(path) as f:
-            f.write(json.dumps(current_status,indent=2))
+        with safe_open(path,"w") as f:
+            f.write(json.dumps(data,indent=2))
     except:
-        print("Failed to safely open the output status file, nothing was written.\n")
+        print("Failed to safely open the JSON file, nothing was written.\n")
 
 def write_plotdata(bought_stocks_data,path):
     '''
@@ -109,46 +136,15 @@ def write_plotdata(bought_stocks_data,path):
             result[ticker][str(timestamp)]=new_dict
 
     try:
-        with safe_open_w(path) as f:
+        with safe_open(path,"w") as f:
             f.write(json.dumps(result,indent=2))
     except:
         print("Failed to safely open the output plotdata file, nothing was written.\n")
         
-def write_output_formatted(mode,text,path):
-    '''
-    This files writes a new, formatted line to the output file (log).
-    '''
-    try:
-        with safe_open_a(path) as f:
-            f.write("{} -:- {:22} {}".format(date_now(),mode,text)+'\n')
-    except:
-        print("Failed to safely open the output log file, nothing was written.\n")
 
-def safe_write(data,path,option):
-    '''
-    This files writes a new line to the output file (log).
-    '''
-    try:
-        with safe_open(path,option) as f:
-            f.write(data)
-    except:
-        print("UTILS: SAFE WRITE ERROR")
-        pass
-
-def get_latest_log():
-    list_of_files=glob.glob('./output/ALGO_TRADING_LOG*')
-    if not list_of_files:
-        return None
-    return max(list_of_files, key=os.path.getctime)
-
-def get_status_log():
-    list_of_files=glob.glob('./output/ALGO_STATUS_LOG*')
-    if not list_of_files:
-        return None
-    return max(list_of_files, key=os.path.getctime)
-
-def get_plotdata_log():
-    list_of_files=glob.glob('./output/ALGO_PLOTDATA_LOG*')
+### RETRIEVE/READ DATA AND FILES ###
+def get_latest_log(keyword):
+    list_of_files=glob.glob('./output/ALGO_{}_LOG*'.format(keyword))
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)
@@ -159,6 +155,18 @@ def get_plot(ticker):
         return None
     return max(list_of_files, key=os.path.getctime)
 
+def read_tosell_data(tosell_log):
+    if not tosell_log:
+        return {}
+    try:
+        with safe_open(tosell_log,"r") as f:
+            data=f.read()
+        return json.loads(data)
+    except:
+        print("Failed to safely open the tosell log.")
+
+
+### PYTHON SOCKET PROGRAMMING ###
 def receive_chunks(conn,size):
     chunks=[]
     bytes_recvd=0
@@ -179,6 +187,8 @@ def send_chunks(conn,data):
             raise RuntimeError("Socket connection broken.")
         totalsent+=sent   
 
+
+### HOUSEKEEPING ###
 def clean_output(output_dir,output_dir_plots):
     '''
     This function cleans the output directory (log+output plots).
@@ -197,3 +207,6 @@ def clean_output(output_dir,output_dir_plots):
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
     mkdir_p(output_dir_plots)
+
+
+    
