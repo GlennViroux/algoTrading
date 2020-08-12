@@ -4,47 +4,60 @@
 import time as _time
 import datetime as _datetime
 import matplotlib.pyplot as _plt
-import pandas as _pd
+import pandas as pd
 from trade_logic import Stocks
-import main_restful_api
+from yahoo_scraping import YahooScraper
 import utils
 import threading
+import argparse
+import shutil as sh
 
-
-STARTING_BALANCE=10000
-stocks=Stocks(STARTING_BALANCE)
 OUTPUT_DIR="./output/"
 OUTPUT_DIR_LOG=OUTPUT_DIR+"ALGO_TRADING_LOG_{}.txt".format(utils.date_now_filename())
 OUTPUT_DIR_PLOTS=OUTPUT_DIR+"plots"
 OUTPUT_DIR_STATUS=OUTPUT_DIR+"ALGO_STATUS_LOG_{}.txt".format(utils.date_now_filename())
 OUTPUT_DIR_PLOTDATA=OUTPUT_DIR+"ALGO_PLOTDATA_LOG_{}.txt".format(utils.date_now_filename())
 OUTPUT_DIR_OVERVIEW=OUTPUT_DIR+"ALGO_OVERVIEW_LOG_{}.txt".format(utils.date_now_filename())
+ENDING_CONFIG_PATH=OUTPUT_DIR+"ALGO_ENDING_CONFIG_{}.txt".format(utils.date_now_filename())
+
+# Parse input arguments
+parser=argparse.ArgumentParser(description="GLENNY's argument parser")
+parser.add_argument('--config_file','-c',type=str,help='Configuration file in JSON format containing initial state.')
+args=parser.parse_args()
+
+# Initialize stocks object with configuration values
+init_val=utils.read_initial_values(args.config_file)
+stocks=Stocks(balance=init_val["balance"],
+                current_stocks=init_val["current_stocks"],
+                previously_checked_stocks=init_val["previously_checked_stocks"],
+                bought_stock_data=init_val["bought_stock_data"],
+                current_status=init_val["current_status"],
+                tosell=init_val["tosell"])
 
 # Clean output directory
 utils.clean_output(OUTPUT_DIR,OUTPUT_DIR_PLOTS)
 
-# Get server running in daemon thread
-s=threading.Thread(target=main_restful_api.start,args=(),daemon=True)
-s.start()
-
+# Set initial values
+stock_market_open=True
 ronde=-1
-while True:
+counter=0
+
+while stock_market_open:
     ronde+=1
     MODE="STATUS INFORMATION   -:-"
 
-    # 1) Write current overview
+    # Write current overview
     utils.write_json(stocks.get_overview(),OUTPUT_DIR_OVERVIEW)
 
-    # 2) Write current status per owned stock
+    # Write current status per owned stock
     utils.write_json(stocks.current_status,OUTPUT_DIR_STATUS)
     
-    # 3) Write plotdata per owned stock
+    # Write plotdata per owned stock
     utils.write_plotdata(stocks.bought_stock_data,OUTPUT_DIR_PLOTDATA)
 
-    # 4) Logging...
+    # Logging...
     utils.write_output("-"*220,OUTPUT_DIR_LOG)
     utils.write_output_formatted(MODE,"Current Balance: ${}".format(stocks.balance),OUTPUT_DIR_LOG)
-    utils.write_output_formatted(MODE,"Virtual Total  : ${}".format(stocks.virtual_total),OUTPUT_DIR_LOG)
     utils.write_output_formatted(MODE,"Plotting bought stocks data...",OUTPUT_DIR_LOG)
     stocks.plot_bought_stock_data(OUTPUT_DIR_PLOTS)
 
@@ -53,21 +66,35 @@ while True:
     else:
         utils.write_output_formatted(MODE,"Stocks in posession: {}".format(utils.write_stocks(stocks.current_stocks)),OUTPUT_DIR_LOG)
 
-    # 5) Read and save whether the user has ordered manually to sell a certain stock, and if true, sell it
-    selldata_log=utils.get_latest_log("TOSELL")
-    stocks.tosell=utils.read_tosell_data(selldata_log)
+    # Read and save whether the user has ordered manually to sell a certain stock, and if true, sell it
+    commands_log=utils.get_latest_log("COMMANDS")
+    commands=utils.read_commands(commands_log)
+    stocks.tosell=commands['tickers']
     stocks.hard_sell_check(OUTPUT_DIR_LOG)
 
-    # 6) Check whether we want to buy new stocks, and if true, buy them
+
+    # Check whether we want to buy new stocks, and if true, buy them
     if (ronde==0):  
         MODE="CHECK TO BUY         -:-"
         if not stocks.check_to_buy(OUTPUT_DIR_LOG):
             utils.write_output_formatted(MODE,"Not buying anything because of error.",OUTPUT_DIR_LOG)
 
-    # 7) Check whether we want to sell any of our current stocks, and if true, sell them
+    # Check whether we want to sell any of our current stocks, and if true, sell them
     elif ronde==1:  
         stocks.check_to_sell(OUTPUT_DIR_LOG)
         ronde=-1
+
+    # Check if all markets are closed
+    scraper=YahooScraper()
+    #if scraper.all_markets_closed(stocks.current_stocks):
+    counter+=1
+    if (counter==7) or ("STOPALGORITHM" in commands['commands']):
+        utils.write_config(stocks,ENDING_CONFIG_PATH)
+        sh.copy(ENDING_CONFIG_PATH,"./latest_state.json")
+        stock_market_open=False
+
+
+
 
 
 

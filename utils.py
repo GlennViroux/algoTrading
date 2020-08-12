@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import datetime as _datetime
-import pandas as _pd
+from datetime import datetime
+from pytz import timezone
+import pandas as pd
 import glob
 import os,os.path
 import shutil
@@ -11,10 +12,13 @@ import json
 
 ### LOG WRITING OPERATIONS ###
 def date_now():
-    return _datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
+    return datetime.now().strftime("%Y/%m/%d-%H:%M:%S")
 
 def date_now_filename():
-    return _datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    return datetime.now().strftime("%Y%m%d%H%M%S")
+
+def date_now_flutter():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def write_stocks(current_stocks):
     '''
@@ -82,6 +86,7 @@ def mkdir_p(path):
         if exc.errno==errno.EEXIST or os.path.isdir(path):
             pass
         else:
+            print(exc)
             raise
 
 def safe_open(path,option):
@@ -90,20 +95,6 @@ def safe_open(path,option):
     '''
     mkdir_p(os.path.dirname(path))
     return open(path,option)
-
-def safe_open_w(path):
-    '''
-    This function opens "path" for writing, creating directories if needed.
-    '''
-    mkdir_p(os.path.dirname(path))
-    return open(path,'w')
-    
-def safe_open_a(path):
-    '''
-    This function opens "path" for writing, creating directories if needed.
-    '''
-    mkdir_p(os.path.dirname(path))
-    return open(path,'a')
 
 ### WRITE DATA FOR API ###
 def write_json(data,path):
@@ -120,13 +111,13 @@ def write_plotdata(bought_stocks_data,path):
     '''
     This function writes the current plotdata in JSON format.
     '''
-    df=_pd.DataFrame(bought_stocks_data)
+    df=pd.DataFrame(bought_stocks_data)
     result={}
-    for ticker in _pd.unique(df.ticker):
+    for ticker in pd.unique(df.ticker):
         df_ticker=df[df['ticker']==ticker]
         result[ticker]={}
         for timestamp in df_ticker.timestamps:
-            df_timestamp=df_ticker[df['timestamps']==timestamp]
+            df_timestamp=df[(df['ticker']==ticker) & (df['timestamps']==timestamp)]
             new_dict = {'bid':str(df_timestamp.bid.iloc[0]),
                         'ask':str(df_timestamp.ask.iloc[0]),
                         'bought':str(df_timestamp.bought.iloc[0]),
@@ -141,6 +132,28 @@ def write_plotdata(bought_stocks_data,path):
     except:
         print("Failed to safely open the output plotdata file, nothing was written.\n")
         
+def write_config(stocks,path):
+    '''
+    This function writes the ending config of the daily execution.
+    '''
+    result={}
+    d=stocks.bought_stock_data
+    d['timestamps']=[str(t) for t in stocks.bought_stock_data['timestamps']]
+
+    result["balance"]=stocks.balance
+    result["current_stocks"]=stocks.current_stocks
+    result["previously_checked_stocks"]=stocks.previously_checked_stocks
+    result["bought_stock_data"]=d
+    result["current_status"]=stocks.current_status
+    result["tosell"]=stocks.tosell
+
+    try:
+        with safe_open(path,"w") as f:
+            f.write(json.dumps(result,indent=2))
+    except:
+        print("Failed to safely open the output config file, nothing was written.\n")
+
+
 
 ### RETRIEVE/READ DATA AND FILES ###
 def get_latest_log(keyword):
@@ -155,15 +168,33 @@ def get_plot(ticker):
         return None
     return max(list_of_files, key=os.path.getctime)
 
-def read_tosell_data(tosell_log):
-    if not tosell_log:
+def read_json_data(log):
+    if not log:
         return {}
     try:
-        with safe_open(tosell_log,"r") as f:
+        with safe_open(log,"r") as f:
             data=f.read()
         return json.loads(data)
     except:
-        print("Failed to safely open the tosell log.")
+        print("Failed to safely open the log.")
+
+def read_commands(log):
+    commands=read_json_data(log)
+    if not 'tickers' in commands:
+        commands['tickers']=[]
+    if not 'commands' in commands:
+        commands['commands']=[]
+    return commands
+
+
+def read_initial_values(config_path):
+    try:
+        with safe_open(config_path,"r") as f:
+            data=f.read()
+        json_data=json.loads(data)
+        return json_data
+    except:
+        print("Failed to safely open the config file.")
 
 
 ### PYTHON SOCKET PROGRAMMING ###
@@ -209,4 +240,4 @@ def clean_output(output_dir,output_dir_plots):
     mkdir_p(output_dir_plots)
 
 
-    
+### TIME OPERATIONS ###

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import requests as _requests
+import requests as requests
 import datetime as _datetime
-import pandas as _pd
+import pandas as pd
 import time as _time
 
 MAX_RETRY_PER_SYMBOL=3
@@ -24,7 +24,7 @@ class AlphaAPI():
         params["apikey"]=self.apikey
         params["datatype"]=datatype
 
-        response=_requests.get(self.base_url,params=params)
+        response=requests.get(self.base_url,params=params)
 
         if (response.status_code!=200):
             print("ERROR: Response status code: ",response.status_code)
@@ -43,14 +43,14 @@ class AlphaAPI():
 
         data_dict={"timestamps":[],"opens":[],"highs":[],"lows":[],"closes":[],"volumes":[]}
         for timestamp in data_per_timestamp:
-            data_dict["timestamps"].append(_pd.to_datetime(timestamp))
+            data_dict["timestamps"].append(pd.to_datetime(timestamp))
             data_dict["opens"].append(float(data_per_timestamp[timestamp]["1. open"]))
             data_dict["highs"].append(float(data_per_timestamp[timestamp]["2. high"]))
             data_dict["lows"].append(float(data_per_timestamp[timestamp]["3. low"]))
             data_dict["closes"].append(float(data_per_timestamp[timestamp]["4. close"]))
             data_dict["volumes"].append(float(data_per_timestamp[timestamp]["5. volume"]))
 
-        df=_pd.DataFrame(data_dict)
+        df=pd.DataFrame(data_dict)
 
         return df
 
@@ -60,7 +60,7 @@ class AlphaAPI():
         params["symbol"]=self.symbol
         params["apikey"]=self.apikey
 
-        response=_requests.get(self.base_url,params=params)
+        response=requests.get(self.base_url,params=params)
 
         if (response.status_code!=200):
             print("ERROR: Response status code: ",response.status_code)
@@ -92,15 +92,14 @@ class AlphaAPI():
         params["interval"]=interval
         params["series_type"]=series_type
         params["time_period"]=time_period
-        params["outputsize"]=datatype
+        params["outputsize"]=outputsize
         params["apikey"]=self.apikey
 
         success=False
-        for retry_cnt in range(MAX_RETRY_PER_SYMBOL):
-            
-            response=_requests.get(self.base_url,params=params)
+        for retry_cnt in range(MAX_RETRY_PER_SYMBOL): 
+            response=requests.get(self.base_url,params=params)
 
-            if (response.status_code!=200):
+            if (response.status_code!=200):        
                 _time.sleep(0.2)
             else:
                 success=True
@@ -108,6 +107,7 @@ class AlphaAPI():
 
         if not success:
             print("ERROR: Response status code: ",response.status_code)
+            print(response.text)
             raise RuntimeError("ERROR: No valid response was received from the AlphaVantage API on count {}.".format(retry_cnt))
 
         data=response.json()
@@ -123,10 +123,10 @@ class AlphaAPI():
         
         data_dict={"timestamps":[],"EMA":[]}
         for timestamp in data_per_timestamp:
-            data_dict["timestamps"].append(_pd.to_datetime(timestamp))
+            data_dict["timestamps"].append(pd.to_datetime(timestamp))
             data_dict["EMA"].append(float(data_per_timestamp[timestamp]["EMA"]))
 
-        df=_pd.DataFrame(data_dict)
+        df=pd.DataFrame(data_dict)
         df.sort_values(by='timestamps',axis=0,inplace=True)
 
         return df

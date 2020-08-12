@@ -5,10 +5,11 @@ import os.path
 import json
 
 OUTPUT_DIR="./output/"
-OUTPUT_DIR_TOSELL=OUTPUT_DIR+"ALGO_TOSELL_LOG_{}.txt".format(utils.date_now_filename())
+OUTPUT_DIR_COMMANDS=OUTPUT_DIR+"ALGO_COMMANDS_LOG_{}.txt".format(utils.date_now_filename())
 
-to_sell_parser=reqparse.RequestParser()
-to_sell_parser.add_argument("tickers",type=str,help="Ticker of which you want to sell all currently owned stocks.")
+commands_parser=reqparse.RequestParser()
+commands_parser.add_argument("tickers",type=str,help="Ticker of which you want to sell all currently owned stocks.")
+commands_parser.add_argument("commands",type=str,help="General commands you want to pass.")
 
 
 class Plot(Resource):
@@ -17,8 +18,6 @@ class Plot(Resource):
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
         filename=os.path.basename(plotpath)
-        print("GLENNY filename",filename)
-        print("GLENNY plotpath",plotpath)
         return send_from_directory("/Users/glennviroux/Documents/VSCode/algoTrading/output/plots/",filename,attachment_filename=filename)
 
 class Log(Resource):
@@ -57,24 +56,38 @@ class Overview(Resource):
         filename=os.path.basename(overviewpath)
         return send_from_directory(dirname,filename,attachment_filename=filename)
 
-class ToSell(Resource):
+class Commands(Resource):
     def post(self):
-        selldata_log=utils.get_latest_log("TOSELL")
-        existing_data=utils.read_tosell_data(selldata_log)
-        if existing_data and len(existing_data['tickers'])>0:
-            tickers=existing_data['tickers']
-        else:
-            tickers=[]
+        commands_log=utils.get_latest_log("COMMANDS")
+        existing_data=utils.read_json_data(commands_log)
+        tickers=[]
+        commands=[]
+        if existing_data:
+            if len(existing_data['tickers'])>0:
+                tickers=existing_data['tickers']
 
-        args=to_sell_parser.parse_args()
-        print("GLENNY args {}".format(args))
+            if len(existing_data['commands'])>0:
+                commands=existing_data['commands']
+
+        args=commands_parser.parse_args()
 
         args_dict=dict(args)
-        print("GLENNY args dict {}".format(args_dict))
         tickers.append(args_dict['tickers'])
-        result={'tickers':list(set(tickers))}
-        utils.write_json(result,OUTPUT_DIR_TOSELL)
+        commands.append(args_dict['commands'])
+        if "SELLALL" in commands:
+            tickers.append("ALLSTOCKS")
+        
+        for ticker in tickers:
+            print(type(ticker))
+            print(ticker)
+
+        tickers=[ticker for ticker in tickers if ticker]
+        commands=[command for command in commands if command]
+
+        result={'tickers':list(set(tickers)),'commands':list(set(commands))}
+        utils.write_json(result,OUTPUT_DIR_COMMANDS)
         return result,200
+
 
 
 def start():
@@ -86,6 +99,8 @@ def start():
     api.add_resource(Status,"/status/")
     api.add_resource(PlotData,"/plotdata/")
     api.add_resource(Overview,"/overview/")
-    api.add_resource(ToSell,"/tosell/")
+    api.add_resource(Commands,"/commands/")
 
-    app.run(debug=False,host='192.168.1.37',port=5050)
+    app.run(debug=True,host='192.168.1.37',port=5050)
+
+start()

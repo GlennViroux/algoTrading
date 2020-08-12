@@ -8,7 +8,7 @@ from yahoo_scraping import YahooScraper
 from ticker_alpha import Alpha
 import utils
 import datetime as _datetime
-import pandas as _pd
+import pandas as pd
 import numpy as _np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -22,16 +22,17 @@ PREV_STOCKS_CHECKED=15
 MONEY_TO_SPEND=500
 ALPHA_INTRADAY_INTERVAL='30min'
 ALPHA_EMA_INTERVAL='30min'
+YAHOO_LATENCY_THRESHOLD=20
 
 
 class Stocks:
     def __init__(self,
-                balance,
+                balance=0,
                 current_stocks={},
                 previously_checked_stocks=[],
                 bought_stock_data={'ticker':[],'timestamps':[],'bid':[],'ask':[],'bought':[],'EMA_small':[],'EMA_big':[]},
                 current_status={},
-                tosell={}):
+                tosell=[]):
         '''
         balance : current balance. I.e. money in account ready to spend.
         virtual balance : Money that would be in account if we would sell everything now at the current bidding prices.
@@ -54,10 +55,9 @@ class Stocks:
                 }
             }   
         tosell : 
-            {'tickers':['ticker1','ticker2',...]}
+            ['ticker1','ticker2',...]
         '''
         self.balance=balance
-        self.virtual_total=balance
         self.current_stocks=current_stocks
         self.previously_checked_stocks=previously_checked_stocks
         self.bought_stock_data=bought_stock_data
@@ -67,10 +67,6 @@ class Stocks:
     @property
     def get_balance(self):
         return self.balance
-
-    @property
-    def get_virtual_total(self):
-        return self.virtual_total
 
     @property
     def get_current_stocks(self):
@@ -91,9 +87,10 @@ class Stocks:
         '''
         if self.tosell:
             remove_all_stocks=False
-            output_dir_tosell=utils.get_latest_log("TOSELL")
+            command_log=utils.get_latest_log("COMMANDS")
+            commands=utils.read_commands(command_log)
             scraper=YahooScraper()
-            tickers=self.tosell['tickers']
+            tickers=self.tosell
             if "ALLSTOCKS" in tickers:
                 remove_all_stocks=True
                 tickers=list(self.current_stocks.keys())
@@ -118,7 +115,7 @@ class Stocks:
                 utils.write_output_formatted(HARDSELL_MODE,"Selling {} stocks from {} for ${} ...".format(number,ticker,number*bid_price),output_dir_log)
                     
                 self.bought_stock_data['ticker'].append(ticker)
-                self.bought_stock_data['timestamps'].append(_pd.Timestamp.now())
+                self.bought_stock_data['timestamps'].append(pd.Timestamp.now())
                 self.bought_stock_data['bid'].append(bid_price)
                 self.bought_stock_data['ask'].append(ask_price)
                 self.bought_stock_data['EMA_small'].append(_np.nan)
@@ -127,12 +124,13 @@ class Stocks:
                 self.current_stocks.pop(ticker)
                 self.balance+=(number*bid_price)
                 self.bought_stock_data['bought'].append(0)
+                self.current_status[ticker]['timestamp_updated']=utils.date_now_flutter()
                 self.current_status[ticker]["value_sold"]=str(round(number*bid_price,3))
-                self.current_status[ticker]["final_result"]=str(round((float(self.current_status[ticker]["value_bought"])-float(self.current_status[ticker]["value_bought"]))*number,3))
+                self.current_status[ticker]["final_result"]=str(round((float(self.current_status[ticker]["value_current"])-float(self.current_status[ticker]["value_bought"]))*number,3))
                 self.current_status[ticker]["timestamp_sold"]=utils.date_now()
 
                 self.current_status[ticker]["value_current"]=str(round(self.current_status[ticker]["number"]*ask_price,3))
-                self.current_status[ticker]["virtual_result"]=str(round((float(self.current_status[ticker]["value_current"])-float(self.current_status[ticker]["value_bought"]))*number,3))
+                self.current_status[ticker]["virtual_result"]="-"
 
                 to_remove.append(ticker)
                 
@@ -140,11 +138,14 @@ class Stocks:
                 utils.write_output_formatted(HARDSELL_MODE,"Sold {} stocks from {} for ${}".format(number,ticker,number*bid_price),output_dir_log)
             
             if remove_all_stocks:
-                self.tosell['tickers']=[]
+                self.tosell=[]
+                commands['tickers']=[]
             else:
                 for ticker in to_remove:
-                    self.tosell['tickers'].remove(ticker)
-            utils.write_json(self.tosell,output_dir_tosell)
+                    self.tosell.remove(ticker)
+                    commands['tickers'].remove(ticker)
+
+            utils.write_json(commands,command_log)
 
 
     def get_overview(self):
@@ -166,7 +167,7 @@ class Stocks:
                 total_virtual_result+=float(data[key]['virtual_result'])
             elif data[key]['final_result']!="-":
                 total_final_result+=float(data[key]['final_result'])
-        result={'timestamp':utils.date_now(),'total_virtual_result':total_virtual_result,'total_final_result':total_final_result,'number_of_stocks_owned':number_of_stocks_owned}
+        result={'timestamp':utils.date_now_flutter(),'total_virtual_result':round(total_virtual_result,2),'total_final_result':round(total_final_result,2),'number_of_stocks_owned':number_of_stocks_owned}
         return result
 
     def get_EMA(self,yahooscraper,alpha,ticker,interval,time_period):
@@ -197,11 +198,11 @@ class Stocks:
             EMA_list=EMA_dict['EMA']
             last_EMA=EMA_df.iloc[-1]['EMA']
         except:
-            return _pd.DataFrame()
+            return pd.DataFrame()
         
         bid_and_ask=yahooscraper.get_bid_and_ask(ticker)
         if not bid_and_ask:
-            return _pd.DataFrame()
+            return pd.DataFrame()
 
         ask_price=bid_and_ask['ask']
 
@@ -210,13 +211,13 @@ class Stocks:
         timestamps_list.append(_datetime.datetime.now())
         EMA_list.append(last_EMA_updated)
 
-        return _pd.DataFrame({'timestamps':timestamps_list,'EMA':EMA_list})
+        return pd.DataFrame({'timestamps':timestamps_list,'EMA':EMA_list})
 
     def update_bought_stock_data_buying(self,stock,data,df_EMA_small,df_EMA_big,bid_price,ask_price,EMA_small,EMA_big):
         '''
         This function updates the information about stocks bought and sold when buying stocks.
         '''
-        df_bought_stock_data=_pd.DataFrame(self.bought_stock_data)
+        df_bought_stock_data=pd.DataFrame(self.bought_stock_data)
 
         df_EMA_small.rename(columns={'EMA':'EMA_small'},inplace=True)
         df_EMA_big.rename(columns={'EMA':'EMA_big'},inplace=True)
@@ -224,26 +225,26 @@ class Stocks:
         EMA_small_dict=df_EMA_small.to_dict('list')
         EMA_big_dict=df_EMA_big.to_dict('list')
 
-        EMA_small_dict['timestamps']+=[_pd.Timestamp.now()]
+        EMA_small_dict['timestamps']+=[pd.Timestamp.now()]
         EMA_small_dict['EMA_small']+=[EMA_small]
-        EMA_big_dict['timestamps']+=[_pd.Timestamp.now()]
+        EMA_big_dict['timestamps']+=[pd.Timestamp.now()]
         EMA_big_dict['EMA_big']+=[EMA_big]
 
-        df_EMA_small=_pd.DataFrame(EMA_small_dict)
-        df_EMA_big=_pd.DataFrame(EMA_big_dict)
+        df_EMA_small=pd.DataFrame(EMA_small_dict)
+        df_EMA_big=pd.DataFrame(EMA_big_dict)
 
-        df_EMA=_pd.concat([df_EMA_small.set_index('timestamps'),df_EMA_big.set_index('timestamps')],axis=1,join='outer').reset_index()
+        df_EMA=pd.concat([df_EMA_small.set_index('timestamps'),df_EMA_big.set_index('timestamps')],axis=1,join='outer').reset_index()
 
-        stock_data=_pd.DataFrame({'timestamps':[_pd.Timestamp.now()]+data['timestamps'].to_list(),
+        stock_data=pd.DataFrame({'timestamps':[pd.Timestamp.now()]+data['timestamps'].to_list(),
                                     'bid':[bid_price]+data['opens'].to_list(),
                                     'ask':[ask_price]+data['opens'].to_list(),
                                     'bought':[1]+[0 for i in range(len(data))]})
 
-        df_EMA_data = _pd.concat([stock_data.set_index('timestamps'),df_EMA.set_index('timestamps')],axis=1,join='outer').reset_index()
+        df_EMA_data = pd.concat([stock_data.set_index('timestamps'),df_EMA.set_index('timestamps')],axis=1,join='outer').reset_index()
         df_EMA_data.insert(0,'ticker',[stock for i in range(len(df_EMA_data))])
         df_EMA_data.reset_index(inplace=True)
 
-        full_df=_pd.concat([df_bought_stock_data.set_index('timestamps'),df_EMA_data.set_index('timestamps')],axis=0,join='outer').reset_index()
+        full_df=pd.concat([df_bought_stock_data.set_index('timestamps'),df_EMA_data.set_index('timestamps')],axis=0,join='outer').reset_index()
         full_df.drop(labels="index",axis=1,inplace=True,errors='ignore')
 
         self.bought_stock_data=full_df.to_dict('list')
@@ -254,7 +255,7 @@ class Stocks:
         This function updates the information about stocks bought and sold when selling stocks.
         '''
         self.bought_stock_data['ticker'].append(stock)
-        self.bought_stock_data['timestamps'].append(_pd.Timestamp.now())
+        self.bought_stock_data['timestamps'].append(pd.Timestamp.now())
         self.bought_stock_data['bid'].append(bid_price)
         self.bought_stock_data['ask'].append(ask_price)
         self.bought_stock_data['bought'].append(0)
@@ -279,14 +280,20 @@ class Stocks:
         utils.write_output_formatted(MODE,"Best gainers: {}".format(utils.write_stocks(gainers)),output_dir_log)
         utils.write_output_formatted(MODE,"Previously checked stocks: {}".format(self.previously_checked_stocks),output_dir_log)
 
-        gainer=gainers[0]
-        name=names[0]
+        gainer=None
+        name=None
         cnt=0
-        while (gainer in self.current_stocks) or (gainer in self.previously_checked_stocks):
-            # Search until a new stock if found which we haven't bought already
-            cnt+=1
+        while (gainer==None) or (gainer in self.current_stocks) or (gainer in self.previously_checked_stocks) or (not scraper.check_if_market_open(gainer)):
+            # Search until a new stock if found which we haven't bought already or until we find one with a market that is open now
+            if cnt>=len(gainers):
+                break
             gainer=gainers[cnt]
             name=names[cnt]
+            cnt+=1
+
+        if not gainer:
+            utils.write_output_formatted(MODE,"No valid stock with an open stock market was found.",output_dir_log)
+            return True
 
         self.previously_checked_stocks.append(gainer)
         self.previously_checked_stocks=self.previously_checked_stocks[-PREV_STOCKS_CHECKED:]
@@ -301,6 +308,10 @@ class Stocks:
 
         if df_EMA_20.empty or df_EMA_200.empty:
             utils.write_output_formatted(ERROR_MODE,"When calculating EMAs, no valid response was received from the Yahoo Finance or AlphaVantage website for the {} stock.".format(gainer),output_dir_log)            
+            time_stop=_datetime.datetime.now()
+            seconds_to_sleep=60-((time_stop-time_start).seconds)
+            utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
+            _time.sleep(seconds_to_sleep)
             return False
 
         EMA_20=df_EMA_20.iloc[-1]['EMA']
@@ -311,6 +322,10 @@ class Stocks:
             utils.write_output_formatted(MODE,"EMA check {}".format(flag1),output_dir_log)
         else:
             utils.write_output_formatted(ERROR_MODE,"EMA check {} (no valid response was received from the AlphaVantage API or Yahoo Finance website for the {} stock.".format(flag1,gainer),output_dir_log)
+            time_stop=_datetime.datetime.now()
+            seconds_to_sleep=60-((time_stop-time_start).seconds)
+            utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
+            _time.sleep(seconds_to_sleep)
             return False
 
         flag2=not (gainer in self.current_stocks)
@@ -325,12 +340,20 @@ class Stocks:
 
             if not bid_and_ask:
                 utils.write_output_formatted(ERROR_MODE,"When getting bid and ask prices, no valid response was received from the Yahoo Finance website for the {} stock.".format(gainer),output_dir_log)
+                time_stop=_datetime.datetime.now()
+                seconds_to_sleep=60-((time_stop-time_start).seconds)
+                utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
+                _time.sleep(seconds_to_sleep)
                 return False
 
             try:
                 data=alpha.last_data(ALPHA_INTRADAY_INTERVAL,outputsize='full')
             except:
                 utils.write_output_formatted(ERROR_MODE,"When getting last data, no valid response was received from the AlphaVantage API for the {} stock.".format(gainer),output_dir_log)
+                time_stop=_datetime.datetime.now()
+                seconds_to_sleep=60-((time_stop-time_start).seconds)
+                utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
+                _time.sleep(seconds_to_sleep)
                 return False
 
             bid_price=bid_and_ask['bid']
@@ -344,7 +367,9 @@ class Stocks:
                                         "virtual_result":"-",
                                         "final_result":"-",
                                         "timestamp_bought":utils.date_now(),
-                                        "timestamp_sold":"-"}
+                                        "timestamp_sold":"-",
+                                        "market_open":"Yes",
+                                        "timestamp_updated":utils.date_now_flutter()}
             self.balance-=stocks_to_buy*ask_price
             self.current_stocks[gainer]=(stocks_to_buy,round(ask_price*stocks_to_buy,3))
             utils.write_output_formatted(MODE,"Buying {} stocks from {} ({}) for ${}".format(stocks_to_buy,gainer,name,round(stocks_to_buy*ask_price,3)),output_dir_log)
@@ -391,6 +416,17 @@ class Stocks:
 
         stocks_list=list(self.current_stocks.keys())
         for stock in stocks_list:
+            if scraper.check_if_market_open(stock)==None:
+                self.current_status[stock]["market_open"]="Unknown"
+                utils.write_output_formatted(MODE,"Not checking to sell {} stocks, market state is unknown".format(stock),output_dir_log)
+                continue
+            elif scraper.check_if_market_open(stock)==False:
+                self.current_status[stock]["market_open"]="No"
+                utils.write_output_formatted(MODE,"Not checking to sell {} stocks, market is closed.".format(stock),output_dir_log)
+                continue
+
+            self.current_status[stock]["market_open"]="Yes"
+
             utils.write_output_formatted(MODE,"Looking to sell {} stocks...".format(stock),output_dir_log)
             time_start=_datetime.datetime.now()
 
@@ -409,7 +445,6 @@ class Stocks:
 
             # With the current bid and ask prices, update information about stocks in posession
             number=self.current_stocks[stock][0]
-            inverted_in_stock=self.current_stocks[stock][1]
 
             bid_ask=scraper.get_bid_and_ask(stock)
             if not bid_ask:
@@ -422,7 +457,7 @@ class Stocks:
                 ask_price=bid_ask['ask']
                 
             self.bought_stock_data['ticker'].append(stock)
-            self.bought_stock_data['timestamps'].append(_pd.Timestamp.now())
+            self.bought_stock_data['timestamps'].append(pd.Timestamp.now())
             self.bought_stock_data['bid'].append(bid_price)
             self.bought_stock_data['ask'].append(ask_price)
             self.bought_stock_data['EMA_small'].append(EMA_20)
@@ -430,6 +465,7 @@ class Stocks:
 
             self.current_status[stock]["value_current"]=str(round(self.current_status[stock]["number"]*ask_price,3))
             self.current_status[stock]["virtual_result"]=str(round((float(self.current_status[stock]["value_current"])-float(self.current_status[stock]["value_bought"]))*number,3))
+            self.current_status[stock]['timestamp_updated']=utils.date_now_flutter()
 
             if flag:
                 # Sell all stocks of the stock we're looking at
@@ -437,12 +473,13 @@ class Stocks:
                 self.balance+=(number*bid_price)
                 self.bought_stock_data['bought'].append(0)
                 self.current_status[stock]["value_sold"]=str(round(number*bid_price,3))
-                self.current_status[stock]["final_result"]=str(round((float(self.current_status[stock]["value_bought"])-float(self.current_status[stock]["value_bought"]))*number,3))
+                self.current_status[stock]["final_result"]=str(round((float(self.current_status[stock]["value_current"])-float(self.current_status[stock]["value_bought"]))*number,3))
+                self.current_status[stock]["virtual_result"]="-"
                 self.current_status[stock]["timestamp_sold"]=utils.date_now()
+                self.current_status[stock]['timestamp_updated']=utils.date_now_flutter()
                 utils.write_output_formatted(MODE,"Selling {} stocks from {} for ${}".format(number,stock,number*bid_price),output_dir_log)
             else:
                 # Update historic plot data for plotting purposes
-                self.virtual_total+=(number*bid_price-inverted_in_stock)
                 self.bought_stock_data['bought'].append(1)
                 utils.write_output_formatted(MODE,"Not selling {} stocks.".format(stock),output_dir_log)
 
@@ -456,7 +493,7 @@ class Stocks:
         This function plots the evolution of the prices per stock, showing also when a stock
         was bought and when it was sold.
         '''
-        df=_pd.DataFrame(self.bought_stock_data)
+        df=pd.DataFrame(self.bought_stock_data)
         #df.dropna(thresh=3,inplace=True)
         tickers=df.ticker.unique()
         
@@ -469,11 +506,11 @@ class Stocks:
             df_bought=df[ticker_cond & bought_cond]
             df_not_bought=df[ticker_cond & not_bought_cond]
 
-            x_ticker=_pd.to_datetime(df_ticker.timestamps)
-            x_bought=_pd.to_datetime(df_bought.timestamps)
-            x_not_bought=_pd.to_datetime(df_not_bought.timestamps)
+            x_ticker=pd.to_datetime(df_ticker.timestamps)
+            x_bought=pd.to_datetime(df_bought.timestamps)
+            x_not_bought=pd.to_datetime(df_not_bought.timestamps)
 
-            #x_ticks=df_ticker.set_index('timestamps').resample(_pd.Timedelta('1 day')).first().reset_index().timestamps.to_list()
+            #x_ticks=df_ticker.set_index('timestamps').resample(pd.Timedelta('1 day')).first().reset_index().timestamps.to_list()
 
             ybid_bought=df_bought.bid
             yask_bought=df_bought.ask

@@ -1,15 +1,77 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import requests as _requests
-import pandas as _pd
-from bs4 import BeautifulSoup as _Soup
+import requests
+import pandas_market_calendars as mcal
+from datetime import datetime,timedelta,timezone
+import pandas as pd
+from bs4 import BeautifulSoup as Soup
 import re
-from utils import yahoo_float
+import utils
+
+MARKET_IDS={'NasdaqGS':'NASDAQ',
+            'NasdaqCM':'NASDAQ',
+            'NasdaqGM':'NASDAQ',
+            'NYSE':'NYSE',
+            'OtherOTC':'NASDAQ'}
 
 class YahooScraper:
     def __init__(self):
         self.base_url="https://finance.yahoo.com/"
+
+    def check_if_market_open(self,ticker):
+        '''
+        Returns true if market for the provided ticker is open at this moment.
+        '''
+        url=self.base_url+"quote/{}".format(ticker.upper())
+        try:
+            req=requests.get(url)
+        except:
+            return None
+
+        if not req.status_code==200:
+            print("Wrong status code.")
+            print(req.status_code)
+            print(req.text)
+            return None
+
+        soep=Soup(req.text,'html.parser')
+        string=soep.find(text=re.compile('.*Currency in.*'))
+        words=string.replace(".","").split("-")
+        words=[word.replace(" ","") for word in words]
+
+        if not len(words)==2:
+            print("Length of market information from yahoo website is not two. Text received: {}".format(string))
+            return None
+
+        cal=mcal.get_calendar(MARKET_IDS[words[0]])
+        dt_now=datetime.now()
+        schema = cal.schedule(start_date=datetime.strftime(dt_now-timedelta(days=1),'%Y-%m-%d'),end_date=datetime.strftime(dt_now+timedelta(days=1),'%Y-%m-%d'))
+
+        return cal.open_at_time(schema, datetime.now(tz=timezone.utc))
+
+    def all_markets_closed(self,current_stocks):
+        '''
+        This function returns True if all relevant stock markets are closed at this moment.
+        '''
+        for ticker in current_stocks.keys():
+            if self.check_if_market_open(ticker):
+                return False
+
+        main_markets=["NASDAQ","NYSE"]
+        for market in main_markets:
+            cal=mcal.get_calendar(market)
+            dt_now=datetime.now()
+            schema = cal.schedule(start_date=datetime.strftime(dt_now-timedelta(days=1),'%Y-%m-%d'),end_date=datetime.strftime(dt_now+timedelta(days=1),'%Y-%m-%d'))
+
+            if (cal.open_at_time(schema, datetime.now(tz=timezone.utc))):
+                return False
+
+        return True
+
+
+
+        
 
     def get_bid_and_ask(self,ticker):
         '''
@@ -17,7 +79,7 @@ class YahooScraper:
         '''
         url=self.base_url+"quote/{}".format(ticker.upper())
         try:
-            req=_requests.get(url)
+            req=requests.get(url)
         except:
             return None
 
@@ -28,13 +90,13 @@ class YahooScraper:
             return None
 
         result={}
-        soep=_Soup(req.text,'html.parser')
+        soep=Soup(req.text,'html.parser')
         bid_tag=soep.find(text="Bid")
         ask_tag=soep.find(text="Ask")
 
         try:
-            bids=[yahoo_float(i) for i in bid_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
-            asks=[yahoo_float(i) for i in ask_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
+            bids=[utils.yahoo_float(i) for i in bid_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
+            asks=[utils.yahoo_float(i) for i in ask_tag.parent.parent.next_sibling.contents[0].get_text().split(" x ")]
         except:
             print("Error in calling get_text() function.")
             return None
@@ -63,13 +125,13 @@ class YahooScraper:
 
     def get_gainers(self):
         url=self.base_url+"gainers"
-        req=_requests.get(url)
-        empty_df=_pd.DataFrame()
+        req=requests.get(url)
+        empty_df=pd.DataFrame()
         
         if not req.status_code==200:
             return empty_df
 
-        soep=_Soup(req.text,'html.parser')
+        soep=Soup(req.text,'html.parser')
         regex=re.compile('.*simpTblRow.*')
         all_results=soep.find_all("tr",{"class":regex})
 
@@ -101,7 +163,7 @@ class YahooScraper:
             if types[key]==float:
                 pd_dict[key]=[elem.replace(',','') for elem in pd_dict[key]]
 
-        df=_pd.DataFrame.from_dict(pd_dict)
+        df=pd.DataFrame.from_dict(pd_dict)
         df=df.astype(types,copy=False)
         df.sort_values(by=["Change"],ascending=False,inplace=True)
 

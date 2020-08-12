@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import requests as _requests
+import requests as requests
 import datetime as _datetime
-import pandas as _pd
+import pandas as pd
 from base_alpha import AlphaAPI
 
 class Alpha(AlphaAPI):
