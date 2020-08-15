@@ -1,105 +1,127 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import time as _time
-import datetime as _datetime
-import matplotlib.pyplot as _plt
-import pandas as pd
-from trade_logic import Stocks
-from yahoo_scraping import YahooScraper
-import utils
+from flask import Flask,send_from_directory,jsonify,make_response
+from flask_restful import Api,Resource,abort,reqparse
 import threading
-import argparse
-import shutil as sh
+import utils
+import os.path
+import json
+import time
+
+from main_algo import start_algorithm
 
 OUTPUT_DIR="./output/"
-OUTPUT_DIR_LOG=OUTPUT_DIR+"ALGO_TRADING_LOG_{}.txt".format(utils.date_now_filename())
-OUTPUT_DIR_PLOTS=OUTPUT_DIR+"plots"
-OUTPUT_DIR_STATUS=OUTPUT_DIR+"ALGO_STATUS_LOG_{}.txt".format(utils.date_now_filename())
-OUTPUT_DIR_PLOTDATA=OUTPUT_DIR+"ALGO_PLOTDATA_LOG_{}.txt".format(utils.date_now_filename())
-OUTPUT_DIR_OVERVIEW=OUTPUT_DIR+"ALGO_OVERVIEW_LOG_{}.txt".format(utils.date_now_filename())
-ENDING_CONFIG_PATH=OUTPUT_DIR+"ALGO_ENDING_CONFIG_{}.txt".format(utils.date_now_filename())
+OUTPUT_DIR_COMMANDS=OUTPUT_DIR+"ALGO_COMMANDS_LOG_{}.txt".format(utils.date_now_filename())
 
-# Parse input arguments
-parser=argparse.ArgumentParser(description="GLENNY's argument parser")
-parser.add_argument('--config_file','-c',type=str,help='Configuration file in JSON format containing initial state.')
-args=parser.parse_args()
+commands_parser=reqparse.RequestParser()
+commands_parser.add_argument("tickers",type=str,help="Ticker of which you want to sell all currently owned stocks.")
+commands_parser.add_argument("commands",type=str,help="General commands you want to pass.")
 
-# Initialize stocks object with configuration values
-init_val=utils.read_initial_values(args.config_file)
-stocks=Stocks(balance=init_val["balance"],
-                current_stocks=init_val["current_stocks"],
-                previously_checked_stocks=init_val["previously_checked_stocks"],
-                bought_stock_data=init_val["bought_stock_data"],
-                current_status=init_val["current_status"],
-                tosell=init_val["tosell"])
+global start_time
+start_time=time.time()
 
-# Clean output directory
-utils.clean_output(OUTPUT_DIR,OUTPUT_DIR_PLOTS)
+class Plot(Resource):
+    def get(self,ticker):
+        plotpath=utils.get_plot(ticker)
+        if plotpath==None:
+            abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
+        filename=os.path.basename(plotpath)
+        return send_from_directory("/Users/glennviroux/Documents/VSCode/algoTrading/output/plots/",filename,attachment_filename=filename)
 
-# Set initial values
-stock_market_open=True
-ronde=-1
-counter=0
+class Retrieve(Resource):
+    def get(self,data_id):
+        datapath=utils.get_latest_log(data_id.upper())
+        if datapath==None:
+            abort(404,message="Datapath for {} does not exist.".format(data_id))
+        dirname=os.path.dirname(datapath)
+        filename=os.path.basename(datapath)
+        return send_from_directory(dirname,filename,attachment_filename=filename)
 
-while stock_market_open:
-    ronde+=1
-    MODE="STATUS INFORMATION   -:-"
+class GetInfo(Resource):
+    def get(self,info_id):
+        if info_id.upper()=="ALGOSTATUS":
+            isrunning="No"
+            duration="0"
+            for thread in threading.enumerate():
+                if thread.getName()=="main_algo":
+                    isrunning="Yes"
+                    duration=str(time.time()-start_time)
+            return make_response(jsonify(isrunning=isrunning,duration=duration),200)
 
-    # Write current overview
-    utils.write_json(stocks.get_overview(),OUTPUT_DIR_OVERVIEW)
+        abort(404,message="This operation is not allowed.")
 
-    # Write current status per owned stock
-    utils.write_json(stocks.current_status,OUTPUT_DIR_STATUS)
-    
-    # Write plotdata per owned stock
-    utils.write_plotdata(stocks.bought_stock_data,OUTPUT_DIR_PLOTDATA)
+        
 
-    # Logging...
-    utils.write_output("-"*220,OUTPUT_DIR_LOG)
-    utils.write_output_formatted(MODE,"Current Balance: ${}".format(stocks.balance),OUTPUT_DIR_LOG)
-    utils.write_output_formatted(MODE,"Plotting bought stocks data...",OUTPUT_DIR_LOG)
-    stocks.plot_bought_stock_data(OUTPUT_DIR_PLOTS)
+class Commands(Resource):
+    def post(self):
+        global start_time
+        for thread in threading.enumerate():
+            print(thread)
+        commands_log=utils.get_latest_log("COMMANDS")
+        existing_data=utils.read_json_data(commands_log)
+        tickers=[]
+        commands=[]
+        if existing_data:
+            if len(existing_data['tickers'])>0:
+                tickers=existing_data['tickers']
 
-    if not bool(stocks.current_stocks):
-        utils.write_output_formatted(MODE,"Currently no stocks are in possession.",OUTPUT_DIR_LOG)
-    else:
-        utils.write_output_formatted(MODE,"Stocks in posession: {}".format(utils.write_stocks(stocks.current_stocks)),OUTPUT_DIR_LOG)
+            if len(existing_data['commands'])>0:
+                commands=existing_data['commands']
 
-    # Read and save whether the user has ordered manually to sell a certain stock, and if true, sell it
-    commands_log=utils.get_latest_log("COMMANDS")
-    commands=utils.read_commands(commands_log)
-    stocks.tosell=commands['tickers']
-    stocks.hard_sell_check(OUTPUT_DIR_LOG)
+        args=commands_parser.parse_args()
+
+        args_dict=dict(args)
+        tickers.append(args_dict['tickers'])
+        commands.append(args_dict['commands'])
+        if "SELLALL" in commands:
+            tickers.append("ALLSTOCKS")
+
+        if "CLEANSTARTALGORITHM" in commands:
+            for thread in threading.enumerate():
+                if thread.getName()=="main_algo":
+                    abort(404,message="Algorithm is already running.")
+
+            algo_thread=threading.Thread(target=start_algorithm,name="main_algo")            
+            start_time=time.time()
+            algo_thread.start()
+
+        if "STARTALGORITHMFROMLATEST" in commands:
+            for thread in threading.enumerate():
+                if thread.getName()=="main_algo":
+                    abort(404,message="Algorithm is already running.")
+
+            algo_thread=threading.Thread(target=start_algorithm,name="main_algo",kwargs={'config_file':'./latest_state.json'})
+            start_time=time.time()
+            algo_thread.start()
+
+        if "STOPALGORITHM" in commands:
+            algo_running=False
+            for thread in threading.enumerate():
+                if thread.getName()=="main_algo":
+                    algo_running==True
+            if not algo_running:
+                abort(404,message="Algorithm isn't running at this moment.")
+
+        tickers=[ticker for ticker in tickers if ticker]
+        commands=[command for command in commands if command]
+
+        result={'tickers':list(set(tickers)),'commands':list(set(commands))}
+        utils.write_json(result,OUTPUT_DIR_COMMANDS)
+        return result,200
 
 
-    # Check whether we want to buy new stocks, and if true, buy them
-    if (ronde==0):  
-        MODE="CHECK TO BUY         -:-"
-        if not stocks.check_to_buy(OUTPUT_DIR_LOG):
-            utils.write_output_formatted(MODE,"Not buying anything because of error.",OUTPUT_DIR_LOG)
+def start_server():
+    app=Flask(__name__)
+    api=Api(app)
 
-    # Check whether we want to sell any of our current stocks, and if true, sell them
-    elif ronde==1:  
-        stocks.check_to_sell(OUTPUT_DIR_LOG)
-        ronde=-1
+    api.add_resource(Commands,"/commands/")
+    api.add_resource(Plot,"/plots/<string:ticker>")
+    api.add_resource(Retrieve,"/retrieve/<string:data_id>")
+    api.add_resource(GetInfo,"/info/<string:info_id>")
 
-    # Check if all markets are closed
-    scraper=YahooScraper()
-    #if scraper.all_markets_closed(stocks.current_stocks):
-    counter+=1
-    if (counter==7) or ("STOPALGORITHM" in commands['commands']):
-        utils.write_config(stocks,ENDING_CONFIG_PATH)
-        sh.copy(ENDING_CONFIG_PATH,"./latest_state.json")
-        stock_market_open=False
+    print("GLENNY active count 0: ",threading.active_count())
+
+    app.run(debug=True,host='192.168.1.37',port=5050)
 
 
-
-
-
-
-
-
-
-
-
+if __name__ == "__main__":
+    print("GLENNY first active count: ",threading.active_count())
+    start_server()

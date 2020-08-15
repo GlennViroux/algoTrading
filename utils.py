@@ -240,4 +240,14 @@ def clean_output(output_dir,output_dir_plots):
     mkdir_p(output_dir_plots)
 
 
-### TIME OPERATIONS ###
+### TRADE OPERATIONS ###
+def close_markets(current_status):
+    '''
+    This function updates all the current statuses of the stocks by closing the markets.
+    '''
+    new_status=current_status
+    for stock in current_status:
+        new_status[stock]['market_open']="No"
+
+    return new_status
+

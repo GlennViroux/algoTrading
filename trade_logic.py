@@ -52,6 +52,9 @@ class Stocks:
                 "final_result" : ""
                 "timestamp_bought" : ""
                 "timestamp_sold" : ""
+                "market_open" : ""
+                "timestamp_updated" : ""
+                "description" : ""
                 }
             }   
         tosell : 
@@ -148,7 +151,7 @@ class Stocks:
             utils.write_json(commands,command_log)
 
 
-    def get_overview(self):
+    def get_overview(self,market_open=True):
         '''
         This function gets the total overview of the current status, in the following form:
         {timestamp: {   'total_virtual_result':...,
@@ -167,7 +170,14 @@ class Stocks:
                 total_virtual_result+=float(data[key]['virtual_result'])
             elif data[key]['final_result']!="-":
                 total_final_result+=float(data[key]['final_result'])
-        result={'timestamp':utils.date_now_flutter(),'total_virtual_result':round(total_virtual_result,2),'total_final_result':round(total_final_result,2),'number_of_stocks_owned':number_of_stocks_owned}
+
+        algo_running=""
+        if market_open:
+            algo_running="Yes"
+        else:
+            algo_running="No"
+
+        result={'algorithm_running':algo_running,'timestamp':utils.date_now_flutter(),'total_virtual_result':round(total_virtual_result,2),'total_final_result':round(total_final_result,2),'number_of_stocks_owned':number_of_stocks_owned}
         return result
 
     def get_EMA(self,yahooscraper,alpha,ticker,interval,time_period):
@@ -283,15 +293,17 @@ class Stocks:
         gainer=None
         name=None
         cnt=0
+        gainer_found=True
         while (gainer==None) or (gainer in self.current_stocks) or (gainer in self.previously_checked_stocks) or (not scraper.check_if_market_open(gainer)):
             # Search until a new stock if found which we haven't bought already or until we find one with a market that is open now
             if cnt>=len(gainers):
+                gainer_found=False
                 break
             gainer=gainers[cnt]
             name=names[cnt]
             cnt+=1
 
-        if not gainer:
+        if (not gainer) or (not gainer_found):
             utils.write_output_formatted(MODE,"No valid stock with an open stock market was found.",output_dir_log)
             return True
 
@@ -369,7 +381,8 @@ class Stocks:
                                         "timestamp_bought":utils.date_now(),
                                         "timestamp_sold":"-",
                                         "market_open":"Yes",
-                                        "timestamp_updated":utils.date_now_flutter()}
+                                        "timestamp_updated":utils.date_now_flutter(),
+                                        "description":scraper.get_description(gainer)}
             self.balance-=stocks_to_buy*ask_price
             self.current_stocks[gainer]=(stocks_to_buy,round(ask_price*stocks_to_buy,3))
             utils.write_output_formatted(MODE,"Buying {} stocks from {} ({}) for ${}".format(stocks_to_buy,gainer,name,round(stocks_to_buy*ask_price,3)),output_dir_log)

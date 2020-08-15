@@ -70,9 +70,6 @@ class YahooScraper:
         return True
 
 
-
-        
-
     def get_bid_and_ask(self,ticker):
         '''
         return {'bid':bid_price,'bid_volume'=bid_volume,'ask'=ask_price,'ask_volume'=ask_volume}
@@ -184,5 +181,35 @@ class YahooScraper:
             return None
         best_gainers=df_gainers.head(number)
         return best_gainers["Name"].to_list()
+
+    def get_description(self,ticker):
+        '''
+        This function returns the detailed description of the company.
+        '''
+        url=self.base_url+"/quote/{}/profile".format(ticker)
+        try:
+            req=requests.get(url)
+        except:
+            return None
+
+        if not req.status_code==200:
+            print("Wrong status code.")
+            print(req.status_code)
+            print(req.text)
+            return None
+
+        soep=Soup(req.text,'html.parser')
+        des_tag=soep.find(text="Description")
+
+        description=""
+        try:
+            description=des_tag.parent.parent.next_sibling.get_text()
+        except:
+            print("Error in calling get_text() function.")
+            return None
+
+        return description
+
+
 
         
