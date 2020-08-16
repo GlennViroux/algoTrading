@@ -117,9 +117,7 @@ def start_server():
     api.add_resource(Retrieve,"/retrieve/<string:data_id>")
     api.add_resource(GetInfo,"/info/<string:info_id>")
 
-    print("GLENNY active count 0: ",threading.active_count())
-
-    app.run(debug=True,host='192.168.1.37',port=5050)
+    app.run(debug=True,host='192.168.0.101',port=5050)
 
 
 if __name__ == "__main__":

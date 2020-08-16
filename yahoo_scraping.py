@@ -186,27 +186,27 @@ class YahooScraper:
         '''
         This function returns the detailed description of the company.
         '''
+        description=""
         url=self.base_url+"/quote/{}/profile".format(ticker)
         try:
             req=requests.get(url)
         except:
-            return None
+            return description
 
         if not req.status_code==200:
             print("Wrong status code.")
             print(req.status_code)
             print(req.text)
-            return None
+            return description
 
         soep=Soup(req.text,'html.parser')
         des_tag=soep.find(text="Description")
 
-        description=""
         try:
             description=des_tag.parent.parent.next_sibling.get_text()
         except:
             print("Error in calling get_text() function.")
-            return None
+            return description
 
         return description
 
