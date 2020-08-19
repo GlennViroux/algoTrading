@@ -1,50 +1,75 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import time as _time
+import time
 import glob
 import os
+import pytz
 from yahoo_scraping import YahooScraper
 from ticker_alpha import Alpha
 import utils
-import datetime as _datetime
+from yahoo_api import YahooAPI
+from datetime import datetime,timedelta
 import pandas as pd
-import numpy as _np
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-
+import shutil
+import urllib.request as request
+from contextlib import closing
+'''
 ERROR_MODE="ERROR                -:-"
 HARDSELL_MODE="HARDSELL             -:-"
 APIKEY="KOB33KN2G0O9X8SX"
-MAX_TIME_DIFF=_datetime.timedelta(days=6)
+MAX_TIME_DIFF=timedelta(days=6)
 MAX_STOCKS=10
 PREV_STOCKS_CHECKED=15
-MONEY_TO_SPEND=500
 ALPHA_INTRADAY_INTERVAL='30min'
 ALPHA_EMA_INTERVAL='30min'
+'''
+
+MONEY_TO_SPEND=500
 YAHOO_LATENCY_THRESHOLD=20
+YAHOO_INTERVAL='5m'
+YAHOO_PERIOD_SMALL_EMA=50
+YAHOO_PERIOD_BIG_EMA=200
+YAHOO_PERIOD_HISTORIC_DATA=5
+NUMBER_OF_STOCKS_TO_MONITOR=1
+NUMBER_OF_BIG_EMAS_THRESHOLD=300
+BIG_EMA_DERIVATIVE_THRESHOLD=0.01
+SURFACE_INDICATOR_THRESHOLD=10
 
 
 class Stocks:
     def __init__(self,
                 balance=0,
-                current_stocks={},
-                previously_checked_stocks=[],
-                bought_stock_data={'ticker':[],'timestamps':[],'bid':[],'ask':[],'bought':[],'EMA_small':[],'EMA_big':[]},
-                current_status={},
-                tosell=[]):
+                bought_stocks={},
+                monitored_stocks=[],
+                monitored_stock_data={},
+                current_status={}):
         '''
         balance : current balance. I.e. money in account ready to spend.
-        virtual balance : Money that would be in account if we would sell everything now at the current bidding prices.
-        current stocks : { ticker : (number of stocks in possesion , money spent when buying the stocks)}        
-        previously checked stocks : list of last stocks we looked into whether they were worth buying or not
-        bought stock data : dictionary (for dataframe) with the following columns:
-            ticker | timestamp | bid (=open) | ask (=open) | EMA_small | EMA_big | bought (1/0) 
+        bought stocks : { ticker : (number of stocks in possesion , money spent when buying the stocks)}    
+        monitored stocks : [stock1,stock2,...]    
+        monitored stock data: 
+            {'ticker' : 
+                {
+                    'timestamps':[],
+                    'open':[],
+                    'close':[],
+                    'low':[],
+                    'high':[],
+                    'volume':[],
+                    'smallEMA':[],
+                    'bigEMA':[]
+                }
+            }
         current status : 
             {'ticker': 
                 {
                 "fullname": ""
                 "number": ""
+                "bought" : ""
                 "value_bought" : ""
                 "value_current" : ""
                 "value_sold" : ""
@@ -61,97 +86,335 @@ class Stocks:
             ['ticker1','ticker2',...]
         '''
         self.balance=balance
-        self.current_stocks=current_stocks
-        self.previously_checked_stocks=previously_checked_stocks
-        self.bought_stock_data=bought_stock_data
+        self.bought_stocks=bought_stocks
+        self.monitored_stocks=monitored_stocks
+        self.monitored_stock_data=monitored_stock_data
         self.current_status=current_status
-        self.tosell=tosell
 
-    @property
-    def get_balance(self):
-        return self.balance
+    def initialize_stocks(self,logger,update_nasdaq_file=False):
+        FUNCTION='get_stocks_to_monitor'
+        '''
+        1) find interesting stocks
+        2) initialize data for found list in 1)
+        '''
+        logger.info("Getting stocks to monitor",extra={'function':FUNCTION})
 
-    @property
-    def get_current_stocks(self):
-        return self.current_stocks
+        # TODO this is only for NASDAQ!
+        file='./nasdaqtraded.txt'
+        if update_nasdaq_file:
+            logger.info("Updating nasdaqtraded file",extra={'function':FUNCTION})
+            with closing(request.urlopen('ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqtraded.txt')) as r:
+                with open(file, 'wb') as f:
+                    shutil.copyfileobj(r, f)
+        
+        df=pd.read_csv(file,delimiter='|')
+        df.drop(df.tail(1).index,inplace=True)
 
-    @property
-    def get_previously_checked_stocks(self):
-        return self.previously_checked_stocks
+        tickers=list(df.Symbol)
 
-    @property
-    def get_bought_stock_data(self):
-        return self.bought_stock_data
+        yah=YahooAPI()
+        scraper=YahooScraper()
+        result=[]
+        for ticker in tickers[:NUMBER_OF_STOCKS_TO_MONITOR]:
+            logger.debug("Checking {}".format(ticker),extra={'function':FUNCTION})
 
-    def hard_sell_check(self,output_dir_log):
+            exchange=scraper.get_exchange(ticker,logger)
+            start_day=utils.get_start_business_date(exchange,YAHOO_PERIOD_HISTORIC_DATA,logger)
+            days_in_past=(datetime.now(pytz.timezone('UTC'))-start_day).days+2
+
+            start=datetime.strftime(datetime.now()-timedelta(days=days_in_past),'%Y/%m/%d-%H:%M:%S')
+            end=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
+
+            df_data=yah.get_data(ticker,start,end,YAHOO_INTERVAL,YAHOO_PERIOD_SMALL_EMA,YAHOO_PERIOD_BIG_EMA,logger=logger)
+
+            if df_data.empty:
+                logger.error("No data was received from the yahooAPI",extra={'function':FUNCTION})
+                continue
+
+            big_EMAs=df_data.bigEMA
+
+            if len(big_EMAs)<NUMBER_OF_BIG_EMAS_THRESHOLD:
+                logger.debug("Ticker: {}. There weren't enough bigEMA measurements ({} vs required {}) to make a decision".format(ticker,len(big_EMAs),NUMBER_OF_BIG_EMAS_THRESHOLD),extra={'function':FUNCTION})
+                continue
+
+            D,A=utils.get_deriv_surf(big_EMAs,logger)
+            logger.debug("Ticker: {}. Derivative: {} and surface indicator: {}.".format(ticker,D,A),extra={'function':FUNCTION})
+
+            if abs(D)>BIG_EMA_DERIVATIVE_THRESHOLD:
+                logger.debug("Ticker: {}. Derivative is too steep ({} vs required {})".format(ticker,abs(D),BIG_EMA_DERIVATIVE_THRESHOLD),extra={'function':FUNCTION})
+                continue
+
+            if A>SURFACE_INDICATOR_THRESHOLD:
+                logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(ticker,A,SURFACE_INDICATOR_THRESHOLD),extra={'function':FUNCTION})
+                continue
+
+            # TODO implement algorithm to select which stocks to monitor       
+            to_monitor=True
+            if to_monitor:
+                if not ticker in self.monitored_stocks:
+                    self.monitored_stocks.append(ticker)
+
+                self.monitored_stock_data[ticker]=df_data.to_dict(orient='list')
+
+                market_open="UNKNOWN"
+                if scraper.check_if_market_open(ticker,logger)==True:
+                    market_open="YES"
+                elif scraper.check_if_market_open(ticker,logger)==False:
+                    market_open="NO"
+
+                self.current_status[ticker]={"fullname":scraper.get_fullname(ticker,logger),
+                                            "number":"-",
+                                            "bought":"NO",
+                                            "value_bought":"-",
+                                            "value_current":"-",
+                                            "value_sold":"-",
+                                            "virtual_result":"-",
+                                            "final_result":"-",
+                                            "timestamp_bought":"-",
+                                            "timestamp_sold":"-",
+                                            "market_open":market_open,
+                                            "timestamp_updated":utils.date_now_flutter(),
+                                            "description":scraper.get_description(ticker,logger)}
+
+
+            logger.debug("Adding {} to the list of stocks to be monitored".format(ticker),extra={'function':FUNCTION})
+            result.append(ticker)
+
+        logger.info("Initialized {} stocks".format(len(result)),extra={'function':FUNCTION})
+        return True
+
+    def initialize_monitored_stocks(self,stocks,logger):
+        FUNCTION='initialize_monitored_stocks'
+        '''
+        Initialize the current status of the stocks we are going to monitor.
+        '''
+        scraper=YahooScraper()
+        yahapi=YahooAPI()
+        number=0
+
+        for stock in stocks:
+
+
+
+
+
+
+            start=datetime.strftime(datetime.now()-timedelta(days=YAHOO_PERIOD_HISTORIC_DATA),'%Y/%m/%d-%H:%M:%S')
+            end=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
+            df_data=yahapi.get_data(stock,start,end,YAHOO_INTERVAL,YAHOO_PERIOD_SMALL_EMA,YAHOO_PERIOD_BIG_EMA)
+            if df_data.empty:
+                logger.error("Stock {}: No valid dataframe was received from the yahooAPI".format(stock),extra={'function':FUNCTION})
+                continue
+
+            number+=1
+            self.monitored_stock_data[stock]=df_data.to_dict(orient='list')
+
+        logger.info("Initialized {} stocks.".format(number),extra={'function':FUNCTION})
+
+
+
+    def check_monitored_stock(self,stock,logger):
+        FUNCTION='check_monitored_stock'
+        '''
+        This function checks in on a stock that is being monitored.
+        '''
+        stock_bought=(stock in self.bought_stocks)
+
+        data=self.monitored_stock_data[stock]
+        smallEMAs=data['smallEMA']
+        bigEMAs=data['bigEMA']
+
+        undervalued=(smallEMAs[-1]<bigEMAs[-1])
+
+        price_to_buy=round(data['high'][-1],2)
+        price_to_sell=round(data['low'][-1],2)
+        price_current_value=round((data['open'][-1]+data['close'][-1])/2,2)
+
+        # 1) If the stock is not bought and undervalued, buy it
+        if stock_bought and undervalued:
+            logger.info("Stock {} is bought and undervalued => update and pass.".format(stock),extra={'function':FUNCTION})
+            number_stocks_owned=self.bought_stocks[stock][0]
+
+            self.current_status[stock]["value_current"]=round(price_current_value*number_stocks_owned,2)
+            self.current_status[stock]["timestamp_updated"]=utils.date_now_flutter()
+
+        elif (not stock_bought) and (not undervalued):
+            logger.info("Stock {} is not bought and overvalued => pass.".format(stock),extra={'function':FUNCTION})
+            pass
+        elif (not stock_bought) and undervalued:
+            logger.info("Stock {} is not bought and undervalued => buy.".format(stock),extra={'function':FUNCTION})
+            # BUY
+            mytime=data['timestamps'][-1]
+            latest_timestamp=datetime(1970,1,1)
+            if isinstance(mytime,str):
+                latest_timestamp=datetime.strptime(mytime,'%Y/%m/%d-%H:%M:%S')
+            else:
+                latest_timestamp=data['timestamps'][-1]
+
+            latency=latest_timestamp-datetime.now()
+            if latency>timedelta(seconds=YAHOO_LATENCY_THRESHOLD):
+                # latest data from yahoo is not valid anymore
+                logger.error("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,YAHOO_LATENCY_THRESHOLD),extra={'function':FUNCTION})
+                pass
+
+            number_to_buy=round(MONEY_TO_SPEND/price_to_buy,2)
+            money_spent=round(number_to_buy*price_to_buy,2)
+
+            self.bought_stocks[stock]=(number_to_buy,money_spent)
+
+            self.current_status[stock]["number"]=number_to_buy
+            self.current_status[stock]["bought"]="YES"
+            self.current_status[stock]["value_bought"]=money_spent
+            self.current_status[stock]["value_current"]=money_spent
+            self.current_status[stock]["value_sold"]="-"
+            self.current_status[stock]["final_result"]="-"
+            self.current_status[stock]["timestamp_bought"]=utils.date_now_flutter()
+            self.current_status[stock]["timestamp_sold"]="-"
+            self.current_status[stock]["market_open"]="YES"
+            self.current_status[stock]["timestamp_updated"]=utils.date_now_flutter()
+
+            logger.info("${} worth of {} stocks were bought.".format(money_spent,stock),extra={'function':FUNCTION})
+
+        # 2) If the stock is bought and overvalued, sell it
+        elif stock_bought and (not undervalued):
+            logger.info("Stock {} is bought and overvalued => sell.".format(stock),extra={'function':FUNCTION})
+            # SELL
+            mytime=data['timestamps'][-1]
+            latest_timestamp=datetime(1970,1,1)
+            if isinstance(mytime,str):
+                latest_timestamp=datetime.strptime(mytime,'%Y/%m/%d-%H:%M:%S')
+            else:
+                latest_timestamp=data['timestamps'][-1]
+
+            latency=latest_timestamp-datetime.now()
+            if latency>timedelta(seconds=YAHOO_LATENCY_THRESHOLD):
+                logger.error("Stock {} was not sold because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,YAHOO_LATENCY_THRESHOLD),extra={'function':FUNCTION})
+                return False
+
+            value_bought=self.current_status[stock]["value_bought"]
+            current_value=round(self.bought_stocks[stock][0]*price_to_sell,2)
+
+            self.bought_stocks.pop(stock)
+
+            self.current_status[stock]["bought"]="NO"
+            self.current_status[stock]["value_current"]=current_value
+            self.current_status[stock]["value_sold"]=current_value
+            self.current_status[stock]["final_result"]=current_value-value_bought
+            self.current_status[stock]["timestamp_sold"]=utils.date_now_flutter()
+            self.current_status[stock]["timestamp_updated"]=utils.date_now_flutter()
+
+            logger.info("All stocks of {} were sold for a total of ${}".format(stock,current_value),extra={'function':FUNCTION})
+
+        # This next option should never occur.
+        else:
+            logger.error("Strange combination",extra={'function':FUNCTION})
+
+
+    def hard_sell_check(self,commands,output_dir_log,command_log,logger):
+        FUNCTION='hard_sell_check'
         '''
         This function checks whether the user has ordered to sell certain stocks using the app, 
         and sells them. 
         '''
-        if self.tosell:
-            remove_all_stocks=False
-            command_log=utils.get_latest_log("COMMANDS")
-            commands=utils.read_commands(command_log)
-            scraper=YahooScraper()
-            tickers=self.tosell
-            if "ALLSTOCKS" in tickers:
-                remove_all_stocks=True
-                tickers=list(self.current_stocks.keys())
-            to_remove=[]
-            for ticker in tickers:
-                if not ticker in self.current_stocks:
-                    utils.write_output_formatted(HARDSELL_MODE,"Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),output_dir_log)
-                    to_remove.append(ticker)
-                    continue
-                    
-                number=self.current_stocks[ticker][0]
-                
-                bid_ask=scraper.get_bid_and_ask(ticker)
-                if not bid_ask:
-                    utils.write_output_formatted(HARDSELL_MODE,"When checking to sell: no valid response was received from the Yahoo Finance website for the {} stock. Selling all stocks for {}.".format(ticker,ticker),output_dir_log)
-                    bid_price=0
-                    ask_price=0
-                else:
-                    bid_price=bid_ask['bid']
-                    ask_price=bid_ask['ask']
+        tickers=commands['tickers']
+        remove_all_stocks=False
+        if "ALLSTOCKS" in tickers:
+            remove_all_stocks=True
+            tickers=list(self.bought_stocks.keys())
 
-                utils.write_output_formatted(HARDSELL_MODE,"Selling {} stocks from {} for ${} ...".format(number,ticker,number*bid_price),output_dir_log)
-                    
-                self.bought_stock_data['ticker'].append(ticker)
-                self.bought_stock_data['timestamps'].append(pd.Timestamp.now())
-                self.bought_stock_data['bid'].append(bid_price)
-                self.bought_stock_data['ask'].append(ask_price)
-                self.bought_stock_data['EMA_small'].append(_np.nan)
-                self.bought_stock_data['EMA_big'].append(_np.nan)
+        if not tickers:
+            return True
 
-                self.current_stocks.pop(ticker)
-                self.balance+=(number*bid_price)
-                self.bought_stock_data['bought'].append(0)
-                self.current_status[ticker]['timestamp_updated']=utils.date_now_flutter()
-                self.current_status[ticker]["value_sold"]=str(round(number*bid_price,3))
-                self.current_status[ticker]["final_result"]=str(round((float(self.current_status[ticker]["value_current"])-float(self.current_status[ticker]["value_bought"]))*number,3))
-                self.current_status[ticker]["timestamp_sold"]=utils.date_now()
-
-                self.current_status[ticker]["value_current"]=str(round(self.current_status[ticker]["number"]*ask_price,3))
-                self.current_status[ticker]["virtual_result"]="-"
-
+        to_remove=[]
+        for ticker in tickers:
+            if not ticker in self.bought_stocks:
+                logger.error("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),extra={'function':FUNCTION})
                 to_remove.append(ticker)
-                
-
-                utils.write_output_formatted(HARDSELL_MODE,"Sold {} stocks from {} for ${}".format(number,ticker,number*bid_price),output_dir_log)
+                continue
+                                
+            data=self.monitored_stock_data[ticker]
+            price_to_sell=round(data['low'][-1],2)
+            price_current_value=round((data['open'][-1]+data['close'][-1])/2,2)
+            number=self.bought_stocks[ticker][0]
+            sell_value=round(number*price_to_sell,2)
+            current_value=round(number*price_current_value,2)
+            value_bought=self.current_status[ticker]["value_bought"]
             
-            if remove_all_stocks:
-                self.tosell=[]
-                commands['tickers']=[]
-            else:
-                for ticker in to_remove:
-                    self.tosell.remove(ticker)
-                    commands['tickers'].remove(ticker)
+            logger.info("Selling {} stocks from {} for ${} ...".format(number,ticker,sell_value),extra={'function':FUNCTION})
 
-            utils.write_json(commands,command_log)
+            self.bought_stocks.pop(ticker)
+            self.current_status[ticker]["bought"]="NO"
+            self.current_status[ticker]["value_current"]=current_value
+            self.current_status[ticker]["value_sold"]=sell_value
+            self.current_status[ticker]["final_result"]=current_value-value_bought
+            self.current_status[ticker]["timestamp_sold"]=utils.date_now_flutter()
+            self.current_status[ticker]["timestamp_updated"]=utils.date_now_flutter()
 
+            to_remove.append(ticker)
+            logger.info("Sold {} stocks from {} for ${}".format(number,ticker,sell_value),extra={'function':FUNCTION})
+        
+        if remove_all_stocks:
+            commands['tickers']=[]
+        else:
+            for ticker in to_remove:
+                commands['tickers'].remove(ticker)
 
-    def get_overview(self,market_open=True):
+        utils.write_json(commands,command_log,logger=logger)
+
+    def plot_monitored_stock_data(self,output_dir_plots,logger):
+        FUNCTION='plot_monitored_stock_data'
+        '''
+        This function plots the evolution of the prices per stock.
+        '''
+        
+        data=self.monitored_stock_data
+        for ticker in data:
+            df=pd.DataFrame(data[ticker])
+
+            print(df)
+
+            if df.empty:
+                logger.error("No valid data for monitored stock {}".format(ticker),extra={'function':FUNCTION})
+                continue
+
+            x_dates=pd.to_datetime(df.timestamps)
+
+            y_close=df.close
+            y_smallEMA=df.smallEMA
+            y_bigEMA=df.bigEMA
+
+            ax=plt.gca()
+            plt.rcParams.update({'axes.titlesize': 20})
+            plt.rcParams.update({'axes.titleweight': 'roman'})
+            ax.xaxis_date()
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d-%H:%M:%S'))
+            plt.xticks(rotation=45)
+            plt.grid(True)
+
+            plt.title("Stock data for {}".format(ticker),pad=18)
+            plt.ylabel("Stock prices [USD]",labelpad=10)
+            
+            ax.scatter(x_dates,y_close,c='tab:olive',marker='.',alpha=0.4,linewidths=0.8,label="Closes")
+            ax.scatter(x_dates,y_smallEMA,c='tab:green',marker='.',alpha=0.4,linewidths=0.8,label="smallEMA")
+            ax.scatter(x_dates,y_bigEMA,c='tab:red',marker='.',alpha=0.4,linewidths=0.8,label="bigEMA")
+
+            ax.legend()
+
+            fig=plt.gcf()
+            fig.set_size_inches(15,8)
+
+            file_list=glob.glob(output_dir_plots+"/*{}*.png".format(ticker.upper()))
+            for f in file_list:
+                os.remove(f)
+
+            plt.tight_layout()
+            plt.savefig(output_dir_plots+"/{}_{}.png".format(utils.date_now_filename(),ticker),dpi=400)
+            plt.clf()
+            plt.cla()
+            plt.close()
+
+    def get_overview(self,logger,market_open=True):
+        FUNCTION='get_overview'
         '''
         This function gets the total overview of the current status, in the following form:
         {timestamp: {   'total_virtual_result':...,
@@ -180,10 +443,11 @@ class Stocks:
         result={'algorithm_running':algo_running,'timestamp':utils.date_now_flutter(),'total_virtual_result':round(total_virtual_result,2),'total_final_result':round(total_final_result,2),'number_of_stocks_owned':number_of_stocks_owned}
         return result
 
+'''
     def get_EMA(self,yahooscraper,alpha,ticker,interval,time_period):
-        '''
+        
         This function calculates the EMA including the last available price from today.
-        '''  
+        
         try:
             last_EMA=alpha.EMA(interval,time_period,'close')
         except RuntimeError:
@@ -198,9 +462,9 @@ class Stocks:
         return EMA_today
 
     def get_EMAs(self,yahooscraper,alpha,ticker,interval,time_period):
-        '''
+        
         This function provides the EMA timeseries including the last available price from today.
-        '''  
+         
         try:
             EMA_df=alpha.EMAs(interval,time_period,'close')
             EMA_dict=EMA_df.to_dict('list')
@@ -224,9 +488,9 @@ class Stocks:
         return pd.DataFrame({'timestamps':timestamps_list,'EMA':EMA_list})
 
     def update_bought_stock_data_buying(self,stock,data,df_EMA_small,df_EMA_big,bid_price,ask_price,EMA_small,EMA_big):
-        '''
+        
         This function updates the information about stocks bought and sold when buying stocks.
-        '''
+        
         df_bought_stock_data=pd.DataFrame(self.bought_stock_data)
 
         df_EMA_small.rename(columns={'EMA':'EMA_small'},inplace=True)
@@ -259,11 +523,10 @@ class Stocks:
 
         self.bought_stock_data=full_df.to_dict('list')
 
-
     def update_bought_stock_data_selling(self,stock,bid_price,ask_price,EMA_small,EMA_big):
-        '''
+        
         This function updates the information about stocks bought and sold when selling stocks.
-        '''
+        
         self.bought_stock_data['ticker'].append(stock)
         self.bought_stock_data['timestamps'].append(pd.Timestamp.now())
         self.bought_stock_data['bid'].append(bid_price)
@@ -272,16 +535,43 @@ class Stocks:
         self.bought_stock_data['EMA_small'].append(EMA_small)
         self.bought_stock_data['EMA_big'].append(EMA_big)
 
+    def EMA_check_alpha(self,stock,scraper):
+        MODE="CHECK TO BUY         -:-"
+        alpha_calls=0
+        alpha=Alpha(gainer,APIKEY)
+        df_EMA_200=self.get_EMAs(scraper,alpha,stock,ALPHA_EMA_INTERVAL,200)
+        alpha_calls+=1
+        df_EMA_20=self.get_EMAs(scraper,alpha,stock,ALPHA_EMA_INTERVAL,20)
+        alpha_calls+=1
 
-    def check_to_buy(self,output_dir_log):
-        '''
+        if df_EMA_20.empty or df_EMA_200.empty:
+            utils.write_output_formatted(ERROR_MODE,"When calculating EMAs, no valid response was received from the Yahoo Finance or AlphaVantage website for the {} stock.".format(gainer),output_dir_log)            
+            return None
+
+        EMA_20=df_EMA_20.iloc[-1]['EMA']
+        EMA_200=df_EMA_200.iloc[-1]['EMA']
+
+        if EMA_20 and EMA_200:
+            flag1=EMA_20>EMA_200
+            utils.write_output_formatted(MODE,"EMA check {}".format(flag1),output_dir_log)
+        else:
+            utils.write_output_formatted(ERROR_MODE,"EMA check {} (no valid response was received from the AlphaVantage API or Yahoo Finance website for the {} stock.".format(flag1,gainer),output_dir_log)
+            return None
+        
+        return flag1,alpha_calls
+
+    def check_to_buy(self,monitored_stocks,output_dir_log,source="yahoo"):
+        
         This function checks out the highest gainer and whether 
         we should buy stocks at this moment.
-        '''
+        
         MODE="CHECK TO BUY         -:-"
+
         scraper=YahooScraper()
         gainers=scraper.get_symbols_best_gainers(20)
         names=scraper.get_names_best_gainers(20)
+
+        alpha_calls=0
 
         if not gainers or not names:
             utils.write_output_formatted(ERROR_MODE,"When checking for best gainers, no valid response was received from the Yahoo Finance website.",output_dir_log)
@@ -294,7 +584,7 @@ class Stocks:
         name=None
         cnt=0
         gainer_found=True
-        while (gainer==None) or (gainer in self.current_stocks) or (gainer in self.previously_checked_stocks) or (not scraper.check_if_market_open(gainer)):
+        while (gainer==None) or (gainer in self.bought_stocks) or (gainer in self.previously_checked_stocks) or (not scraper.check_if_market_open(gainer)):
             # Search until a new stock if found which we haven't bought already or until we find one with a market that is open now
             if cnt>=len(gainers):
                 gainer_found=False
@@ -313,35 +603,14 @@ class Stocks:
         utils.write_output_formatted(MODE,"Looking to buy {} ({}) stocks...".format(gainer,name),output_dir_log)
 
         # Check whether we want to buy stocks of the highest gainer
-        time_start=_datetime.datetime.now()
-        alpha=Alpha(gainer,APIKEY)
-        df_EMA_200=self.get_EMAs(scraper,alpha,gainer,ALPHA_EMA_INTERVAL,200)
-        df_EMA_20=self.get_EMAs(scraper,alpha,gainer,ALPHA_EMA_INTERVAL,20)
+        flag1=False
+        if source=="alpha":
+            flag1,new_alpha_calls=self.EMA_check_alpha(gainer,scraper)
+            alpha_calls+=new_alpha_calls
 
-        if df_EMA_20.empty or df_EMA_200.empty:
-            utils.write_output_formatted(ERROR_MODE,"When calculating EMAs, no valid response was received from the Yahoo Finance or AlphaVantage website for the {} stock.".format(gainer),output_dir_log)            
-            time_stop=_datetime.datetime.now()
-            seconds_to_sleep=60-((time_stop-time_start).seconds)
-            utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
-            _time.sleep(seconds_to_sleep)
-            return False
 
-        EMA_20=df_EMA_20.iloc[-1]['EMA']
-        EMA_200=df_EMA_200.iloc[-1]['EMA']
-
-        if EMA_20 and EMA_200:
-            flag1=EMA_20>EMA_200
-            utils.write_output_formatted(MODE,"EMA check {}".format(flag1),output_dir_log)
-        else:
-            utils.write_output_formatted(ERROR_MODE,"EMA check {} (no valid response was received from the AlphaVantage API or Yahoo Finance website for the {} stock.".format(flag1,gainer),output_dir_log)
-            time_stop=_datetime.datetime.now()
-            seconds_to_sleep=60-((time_stop-time_start).seconds)
-            utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
-            _time.sleep(seconds_to_sleep)
-            return False
-
-        flag2=not (gainer in self.current_stocks)
-        flag3=len(self.current_stocks)<=MAX_STOCKS
+        flag2=not (gainer in self.bought_stocks)
+        flag3=len(self.bought_stocks)<=MAX_STOCKS
 
         utils.write_output_formatted(MODE,"already bought check {}".format(flag2),output_dir_log)
         utils.write_output_formatted(MODE,"max stocks bought check {}".format(flag3),output_dir_log)
@@ -352,20 +621,12 @@ class Stocks:
 
             if not bid_and_ask:
                 utils.write_output_formatted(ERROR_MODE,"When getting bid and ask prices, no valid response was received from the Yahoo Finance website for the {} stock.".format(gainer),output_dir_log)
-                time_stop=_datetime.datetime.now()
-                seconds_to_sleep=60-((time_stop-time_start).seconds)
-                utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
-                _time.sleep(seconds_to_sleep)
                 return False
 
             try:
                 data=alpha.last_data(ALPHA_INTRADAY_INTERVAL,outputsize='full')
             except:
                 utils.write_output_formatted(ERROR_MODE,"When getting last data, no valid response was received from the AlphaVantage API for the {} stock.".format(gainer),output_dir_log)
-                time_stop=_datetime.datetime.now()
-                seconds_to_sleep=60-((time_stop-time_start).seconds)
-                utils.write_output_formatted(MODE,"Sleeping {}s ...".format(seconds_to_sleep),output_dir_log)
-                _time.sleep(seconds_to_sleep)
                 return False
 
             bid_price=bid_and_ask['bid']
@@ -384,7 +645,7 @@ class Stocks:
                                         "timestamp_updated":utils.date_now_flutter(),
                                         "description":scraper.get_description(gainer)}
             self.balance-=stocks_to_buy*ask_price
-            self.current_stocks[gainer]=(stocks_to_buy,round(ask_price*stocks_to_buy,3))
+            self.bought_stocks[gainer]=(stocks_to_buy,round(ask_price*stocks_to_buy,3))
             utils.write_output_formatted(MODE,"Buying {} stocks from {} ({}) for ${}".format(stocks_to_buy,gainer,name,round(stocks_to_buy*ask_price,3)),output_dir_log)
 
             # Save historic stock data for plotting purposes
@@ -403,17 +664,17 @@ class Stocks:
         return True
 
     def check_to_sell(self,output_dir_log):
-        '''
+        
         This functions checks whether we should sell any of the 
         stocks we currently hold.
-        '''
+        
         MODE="CHECK TO SELL        -:-"
 
         scraper=YahooScraper()
 
         # Update first historic stock data for stocks we already sold and are not in our posession anymore
         all_bought_stocks=set(self.bought_stock_data['ticker'])
-        old_stocks=all_bought_stocks-set(self.current_stocks.keys())
+        old_stocks=all_bought_stocks-set(self.bought_stocks.keys())
         for old_stock in old_stocks:
             bid_ask=scraper.get_bid_and_ask(old_stock)
             if not bid_ask:
@@ -427,7 +688,7 @@ class Stocks:
 
             self.update_bought_stock_data_selling(old_stock,bid_price,ask_price,EMA_20,EMA_200)
 
-        stocks_list=list(self.current_stocks.keys())
+        stocks_list=list(self.bought_stocks.keys())
         for stock in stocks_list:
             if scraper.check_if_market_open(stock)==None:
                 self.current_status[stock]["market_open"]="Unknown"
@@ -457,7 +718,7 @@ class Stocks:
             utils.write_output_formatted(MODE,"EMA check {}".format(flag),output_dir_log)
 
             # With the current bid and ask prices, update information about stocks in posession
-            number=self.current_stocks[stock][0]
+            number=self.bought_stocks[stock][0]
 
             bid_ask=scraper.get_bid_and_ask(stock)
             if not bid_ask:
@@ -482,7 +743,7 @@ class Stocks:
 
             if flag:
                 # Sell all stocks of the stock we're looking at
-                self.current_stocks.pop(stock)
+                self.bought_stocks.pop(stock)
                 self.balance+=(number*bid_price)
                 self.bought_stock_data['bought'].append(0)
                 self.current_status[stock]["value_sold"]=str(round(number*bid_price,3))
@@ -502,10 +763,10 @@ class Stocks:
             _time.sleep(seconds_to_sleep)
         
     def plot_bought_stock_data(self,output_dir_plots):
-        '''
+        
         This function plots the evolution of the prices per stock, showing also when a stock
         was bought and when it was sold.
-        '''
+        
         df=pd.DataFrame(self.bought_stock_data)
         #df.dropna(thresh=3,inplace=True)
         tickers=df.ticker.unique()
@@ -564,7 +825,7 @@ class Stocks:
             plt.clf()
             plt.cla()
             plt.close()
-
+'''
 
 
 

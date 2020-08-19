@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import time as _time
-import datetime as _datetime
-import matplotlib.pyplot as _plt
+import logging
+import time
+from datetime import datetime
 import pandas as pd
 from trade_logic import Stocks
 from yahoo_scraping import YahooScraper
@@ -25,85 +25,102 @@ parser=argparse.ArgumentParser(description="GLENNY's argument parser")
 parser.add_argument('--config_file','-c',type=str,help='Configuration file in JSON format containing initial state.',default="./config.json")
 args=parser.parse_args()
 
-def start_algorithm(config_file=None):
-    # Initialize stocks object with configuration values
-    if not config_file:
-        config_file=args.config_file
-    init_val=utils.read_initial_values(config_file)
-    stocks=Stocks(balance=init_val["balance"],
-                    current_stocks=init_val["current_stocks"],
-                    previously_checked_stocks=init_val["previously_checked_stocks"],
-                    bought_stock_data=init_val["bought_stock_data"],
-                    current_status=init_val["current_status"],
-                    tosell=init_val["tosell"])
-
+def start_algorithm(config_file=None,fixed_rounds=None):
+    FUNCTION='main'
     # Clean output directory
     utils.clean_output(OUTPUT_DIR,OUTPUT_DIR_PLOTS)
 
+    # Configure logging
+    logger=logging.getLogger("GLENNYlogger")
+    c_handler=logging.StreamHandler()
+    f_handler=logging.FileHandler(OUTPUT_DIR_LOG)
+    logger.setLevel(logging.DEBUG)
+    f_handler.setLevel(logging.DEBUG)
+    c_handler.setLevel(logging.DEBUG)
+    myFormat=logging.Formatter("[%(asctime)s] - [%(levelname)-8s] - [%(function)-30s] - %(message)s",datefmt="%Y/%m/%d-%H:%M:%S")
+    f_handler.setFormatter(myFormat)
+    c_handler.setFormatter(myFormat)
+    logger.addHandler(f_handler)
+    logger.addHandler(c_handler)
+
+    logger.info("Starting algorithm.",extra={'function':FUNCTION})
+
+    # Initialize stocks object with configuration values
+    if not config_file:
+        config_file=args.config_file
+
+    logger.info("Reading initial values from config file: {}...".format(config_file),extra={'function':FUNCTION})
+    init_val=utils.read_initial_values(config_file,logger=logger)
+    logger.info("Read initial values from config file: {}".format(config_file),extra={'function':FUNCTION})
+
+    stocks=Stocks(balance=init_val["balance"],
+                    bought_stocks=init_val["bought_stocks"],
+                    monitored_stocks=init_val["monitored_stocks"],
+                    current_status=init_val["current_status"],
+                    monitored_stock_data=init_val["monitored_stock_data"])
+
+    # Check which stocks to monitor
+    logger.info("Getting and initializing list of stocks to monitor...",extra={'function':FUNCTION})
+    stocks.initialize_stocks(logger=logger,update_nasdaq_file=False)
+    logger.info("Got and initialized stocks to monitor.",extra={'function':FUNCTION})
+
     # Set initial values
     stock_market_open=True
-    ronde=-1
-    #counter=0
+    counter=0
 
     while stock_market_open:
-        ronde+=1
-        MODE="STATUS INFORMATION   -:-"
-
         # Write current overview
-        utils.write_json(stocks.get_overview(),OUTPUT_DIR_OVERVIEW)
+        logger.info("Writing overview...",extra={'function':FUNCTION})
+        utils.write_json(stocks.get_overview(logger=logger),OUTPUT_DIR_OVERVIEW,logger=logger)
+        logger.info("Written overview...",extra={'function':FUNCTION})
 
-        # Write current status per owned stock
-        utils.write_json(stocks.current_status,OUTPUT_DIR_STATUS)
-        
-        # Write plotdata per owned stock
-        utils.write_plotdata(stocks.bought_stock_data,OUTPUT_DIR_PLOTDATA)
-
-        # Logging...
-        utils.write_output("-"*220,OUTPUT_DIR_LOG)
-        utils.write_output_formatted(MODE,"Current Balance: ${}".format(stocks.balance),OUTPUT_DIR_LOG)
-        utils.write_output_formatted(MODE,"Plotting bought stocks data...",OUTPUT_DIR_LOG)
-        stocks.plot_bought_stock_data(OUTPUT_DIR_PLOTS)
-
-        if not bool(stocks.current_stocks):
-            utils.write_output_formatted(MODE,"Currently no stocks are in possession.",OUTPUT_DIR_LOG)
-        else:
-            utils.write_output_formatted(MODE,"Stocks in posession: {}".format(utils.write_stocks(stocks.current_stocks)),OUTPUT_DIR_LOG)
+        # Write current status per monitored stock
+        logger.info("Writing current status...",extra={'function':FUNCTION})
+        utils.write_json(stocks.current_status,OUTPUT_DIR_STATUS,logger=logger)
+        logger.info("Written current status",extra={'function':FUNCTION})
 
         # Read and save whether the user has ordered manually to sell a certain stock, and if true, sell it
-        commands_log=utils.get_latest_log("COMMANDS")
-        commands=utils.read_commands(commands_log)
-        stocks.tosell=commands['tickers']
-        stocks.hard_sell_check(OUTPUT_DIR_LOG)
+        commands_log=utils.get_latest_log("COMMANDS",logger=logger)
+        commands=utils.read_commands(commands_log,logger=logger)
+        stocks.hard_sell_check(commands,OUTPUT_DIR_LOG,commands_log,logger=logger)
 
+        # Loop through monitored stocks
+        logger.info("Checking monitored stocks...",extra={'function':FUNCTION})
+        for stock in stocks.monitored_stocks:
+            stocks.check_monitored_stock(stock,logger=logger)
+        logger.info("Checked all monitored stocks",extra={'function':FUNCTION})
 
-        # Check whether we want to buy new stocks, and if true, buy them
-        if (ronde==0):  
-            MODE="CHECK TO BUY         -:-"
-            if not stocks.check_to_buy(OUTPUT_DIR_LOG):
-                utils.write_output_formatted(MODE,"Not buying anything because of error.",OUTPUT_DIR_LOG)
-
-        # Check whether we want to sell any of our current stocks, and if true, sell them
-        elif ronde==1:  
-            stocks.check_to_sell(OUTPUT_DIR_LOG)
-            ronde=-1
+        # Plot data per monitored stock
+        logger.info("Plotting monitored stock data...",extra={'function':FUNCTION})
+        stocks.plot_monitored_stock_data(OUTPUT_DIR_PLOTS,logger=logger)
+        logger.info("Plotted all monitored stock data...",extra={'function':FUNCTION})
 
         # Check if all markets are closed
-        scraper=YahooScraper()
-        if scraper.all_markets_closed(stocks.current_stocks) or ("STOPALGORITHM" in commands['commands']):
-        #counter+=1
-        #if (counter==7) or ("STOPALGORITHM" in commands['commands']):
-            print("GLENNY terminating")
-            stocks.current_stocks=utils.close_markets(stocks.current_status)
-            utils.write_json(stocks.get_overview(market_open=False),OUTPUT_DIR_OVERVIEW)
-            utils.write_config(stocks,ENDING_CONFIG_PATH)
-            sh.copy(ENDING_CONFIG_PATH,"./latest_state.json")
-            break
+        if fixed_rounds:
+            counter+=1
+            if counter>fixed_rounds:
+                logger.info("Terminating algorithm because of configured fixed rounds",extra={'function':FUNCTION})
+                stocks.bought_stocks=utils.close_markets(stocks.current_status)
+                utils.write_json(stocks.get_overview(logger=logger,market_open=False),OUTPUT_DIR_OVERVIEW,logger=logger)
+                utils.write_config(stocks,ENDING_CONFIG_PATH,logger=logger)
+                sh.copy(ENDING_CONFIG_PATH,"./latest_state.json")
+                break
+        else:
+            scraper=YahooScraper()
+            if scraper.all_markets_closed(stocks.bought_stocks,logger) or ("STOPALGORITHM" in commands['commands']):
+                logger.info("Terminating algorithm because all relevant markets are closed or it was instructed by the user",extra={'function':FUNCTION})
+                stocks.bought_stocks=utils.close_markets(stocks.current_status)
+                utils.write_json(stocks.get_overview(logger=logger,market_open=False),OUTPUT_DIR_OVERVIEW,logger=logger)
+                utils.write_config(stocks,ENDING_CONFIG_PATH,logger=logger)
+                sh.copy(ENDING_CONFIG_PATH,"./latest_state.json")
+                break
 
     return True
 
 
 
-
+start_algorithm(fixed_rounds=1)
+#start_algorithm(fixed_rounds=2,config_file="./latest_state.json")
 
 
 

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
+import shutil
+import urllib.request as request
+from contextlib import closing
+from datetime import datetime,timedelta
+import pandas_market_calendars as mcal
 from pytz import timezone
 import pandas as pd
 import glob
@@ -9,6 +13,7 @@ import os,os.path
 import shutil
 import errno
 import json
+from yahoo_api import YahooAPI
 
 ### LOG WRITING OPERATIONS ###
 def date_now():
@@ -20,15 +25,15 @@ def date_now_filename():
 def date_now_flutter():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def write_stocks(current_stocks):
+def write_stocks(bought_stocks):
     '''
     This function pretty prints the list of currently owned stocks.
     '''
     l=[]
-    if isinstance(current_stocks,dict):
-        l=list(current_stocks.keys())
-    elif isinstance(current_stocks,list):
-        l=current_stocks
+    if isinstance(bought_stocks,dict):
+        l=list(bought_stocks.keys())
+    elif isinstance(bought_stocks,list):
+        l=bought_stocks
     
     result=""
     for stock in l:
@@ -96,8 +101,10 @@ def safe_open(path,option):
     mkdir_p(os.path.dirname(path))
     return open(path,option)
 
+
 ### WRITE DATA FOR API ###
-def write_json(data,path):
+def write_json(data,path,logger):
+    FUNCTION='write_json'
     '''
     This function writes the data (in dictionary format) in JSON format.
     '''
@@ -105,7 +112,7 @@ def write_json(data,path):
         with safe_open(path,"w") as f:
             f.write(json.dumps(data,indent=2))
     except:
-        print("Failed to safely open the JSON file, nothing was written.\n")
+        logger.error("Unable to write json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 def write_plotdata(bought_stocks_data,path):
     '''
@@ -132,33 +139,34 @@ def write_plotdata(bought_stocks_data,path):
     except:
         print("Failed to safely open the output plotdata file, nothing was written.\n")
         
-def write_config(stocks,path):
+def write_config(stocks,path,logger):
+    FUNCTION='write_config'
     '''
     This function writes the ending config of the daily execution.
     '''
     result={}
-    d=stocks.bought_stock_data
-    d['timestamps']=[str(t) for t in stocks.bought_stock_data['timestamps']]
+    d=stocks.monitored_stock_data
+    for ticker in d:
+        d[ticker]['timestamps']=[str(t) for t in stocks.monitored_stock_data[ticker]['timestamps']]
 
     result["balance"]=stocks.balance
-    result["current_stocks"]=stocks.current_stocks
-    result["previously_checked_stocks"]=stocks.previously_checked_stocks
-    result["bought_stock_data"]=d
+    result["bought_stocks"]=stocks.bought_stocks
+    result["monitored_stocks"]=stocks.monitored_stocks
+    result["monitored_stock_data"]=d
     result["current_status"]=stocks.current_status
-    result["tosell"]=stocks.tosell
 
     try:
         with safe_open(path,"w") as f:
             f.write(json.dumps(result,indent=2))
     except:
-        print("Failed to safely open the output config file, nothing was written.\n")
-
-
+        logger.error("Unable to write config. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 ### RETRIEVE/READ DATA AND FILES ###
-def get_latest_log(keyword):
+def get_latest_log(keyword,logger):
+    FUNCTION='get_latest_log'
     list_of_files=glob.glob('./output/ALGO_{}_LOG*'.format(keyword))
     if not list_of_files:
+        logger.error("No file found for keyword {}".format(keyword),extra={'function':FUNCTION})
         return None
     return max(list_of_files, key=os.path.getctime)
 
@@ -168,7 +176,8 @@ def get_plot(ticker):
         return None
     return max(list_of_files, key=os.path.getctime)
 
-def read_json_data(log):
+def read_json_data(log,logger):
+    FUNCTION='read_json_data'
     if not log:
         return {}
     try:
@@ -176,25 +185,25 @@ def read_json_data(log):
             data=f.read()
         return json.loads(data)
     except:
-        print("Failed to safely open the log.")
+        logger.error("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
-def read_commands(log):
-    commands=read_json_data(log)
+def read_commands(log,logger):
+    commands=read_json_data(log,logger)
     if not 'tickers' in commands:
         commands['tickers']=[]
     if not 'commands' in commands:
         commands['commands']=[]
     return commands
 
-
-def read_initial_values(config_path):
+def read_initial_values(config_path,logger):
+    FUNCTION='read_initial_values'
     try:
         with safe_open(config_path,"r") as f:
             data=f.read()
         json_data=json.loads(data)
         return json_data
     except:
-        print("Failed to safely open the config file.")
+        logger.error("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 
 ### PYTHON SOCKET PROGRAMMING ###
@@ -251,3 +260,46 @@ def close_markets(current_status):
 
     return new_status
 
+def get_deriv_surf(input,logger):
+    FUNCTION="get_deriv_surf"
+    '''
+    Mathematical operations in order to characterize a stock.
+    '''
+    input_list=list(input.dropna())
+
+    if not input_list:
+        logger.error("An empty or no valid input list is provided",extra={'function':FUNCTION})
+        return None
+
+    Ay=input_list[0]
+    By=input_list[-1]
+    Ax=0
+    Bx=len(input_list)
+
+    D=(By-Ay)/(Bx-Ax)
+
+    y = lambda x : D*(x-Ax)+Ay
+
+    A=0
+    for i in range(len(input_list)):
+        A+=abs(y(i)-input_list[i])
+    
+    avg=(Ay+By)/2
+    A/=avg
+
+    return D,A
+
+def get_start_business_date(exchange,input_days_in_past,logger):
+    cal=mcal.get_calendar(exchange)
+
+    start=datetime.strftime(datetime.now()-timedelta(days=100),"%Y-%m-%d")
+    end=datetime.strftime(datetime.now(),"%Y-%m-%d")
+
+    series=cal.valid_days(start_date=start, end_date=end)
+
+    return series[-input_days_in_past]
+
+
+
+
+        

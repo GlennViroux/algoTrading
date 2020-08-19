@@ -7,7 +7,6 @@ import pandas as pd
 from base_alpha import AlphaAPI
 
 class Alpha(AlphaAPI):
-
     def last_price(self):
         return self.get_last_price()
 

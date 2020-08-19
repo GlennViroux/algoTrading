@@ -1,16 +1,7 @@
 {
     "balance": 10000,
-    "current_stocks": {},
-    "previously_checked_stocks": [],
-    "bought_stock_data": {
-        "ticker": [],
-        "timestamps": [],
-        "bid": [],
-        "ask": [],
-        "bought": [],
-        "EMA_small": [],
-        "EMA_big": []
-    },
-    "current_status": {},
-    "tosell": []
+    "bought_stocks": {},
+    "monitored_stocks": [],
+    "monitored_stock_data": {},
+    "current_status": {}
 }
