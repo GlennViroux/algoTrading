@@ -3,5 +3,6 @@
     "bought_stocks": {},
     "monitored_stocks": [],
     "monitored_stock_data": {},
+    "archive":[],
     "current_status": {}
 }

@@ -49,12 +49,9 @@ class GetInfo(Resource):
         abort(404,message="This operation is not allowed.")
 
         
-
 class Commands(Resource):
     def post(self):
         global start_time
-        for thread in threading.enumerate():
-            print(thread)
         commands_log=utils.get_latest_log("COMMANDS")
         existing_data=utils.read_json_data(commands_log)
         tickers=[]
@@ -82,21 +79,23 @@ class Commands(Resource):
             algo_thread=threading.Thread(target=start_algorithm,name="main_algo")            
             start_time=time.time()
             algo_thread.start()
+            commands.remove("CLEANSTARTALGORITHM")
 
         if "STARTALGORITHMFROMLATEST" in commands:
             for thread in threading.enumerate():
                 if thread.getName()=="main_algo":
                     abort(404,message="Algorithm is already running.")
 
-            algo_thread=threading.Thread(target=start_algorithm,name="main_algo",kwargs={'config_file':'./latest_state.json'})
+            algo_thread=threading.Thread(target=start_algorithm,name="main_algo",kwargs={'initial_state_file':'./config/latest_state.json'})
             start_time=time.time()
             algo_thread.start()
+            commands.remove("STARTALGORITHMFROMLATEST")
 
         if "STOPALGORITHM" in commands:
             algo_running=False
             for thread in threading.enumerate():
                 if thread.getName()=="main_algo":
-                    algo_running==True
+                    algo_running=True
             if not algo_running:
                 abort(404,message="Algorithm isn't running at this moment.")
 
@@ -117,9 +116,7 @@ def start_server():
     api.add_resource(Retrieve,"/retrieve/<string:data_id>")
     api.add_resource(GetInfo,"/info/<string:info_id>")
 
-    app.run(debug=True,host='192.168.0.101',port=5050)
-
+    app.run(debug=True,host='192.168.43.91',port=5050)
 
 if __name__ == "__main__":
-    print("GLENNY first active count: ",threading.active_count())
     start_server()

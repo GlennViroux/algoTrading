@@ -28,17 +28,27 @@ ALPHA_INTRADAY_INTERVAL='30min'
 ALPHA_EMA_INTERVAL='30min'
 '''
 
-MONEY_TO_SPEND=500
-YAHOO_LATENCY_THRESHOLD=20
-YAHOO_INTERVAL='5m'
-YAHOO_PERIOD_SMALL_EMA=50
-YAHOO_PERIOD_BIG_EMA=200
-YAHOO_PERIOD_HISTORIC_DATA=5
-NUMBER_OF_STOCKS_TO_MONITOR=1
-NUMBER_OF_BIG_EMAS_THRESHOLD=300
-BIG_EMA_DERIVATIVE_THRESHOLD=0.01
-SURFACE_INDICATOR_THRESHOLD=10
+def get_latest_data(ticker,config_params,logger):
+    FUNCTION='get_latest_data'
+    '''
+    Description
+    '''
+    yah=YahooAPI()
+    scraper=YahooScraper()
+    exchange=scraper.get_exchange(ticker,logger)
+    if not exchange:
+        logger.error("Ticker {} was skipped because no valid response was received from the get_exchange function.",extra={'function':FUNCTION})
+        return pd.DataFrame
 
+    start_day=utils.get_start_business_date(exchange,config_params['trade_logic']['yahoo_period_historic_data'],logger)
+    days_in_past=(datetime.now(pytz.timezone('UTC'))-start_day).days+1
+
+    start=datetime.strftime(datetime.now()-timedelta(days=days_in_past),'%Y/%m/%d-%H:%M:%S')
+    end=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
+
+    df_data=yah.get_data(ticker,start,end,config_params['trade_logic']['yahoo_interval'],config_params['trade_logic']['yahoo_period_small_EMA'],config_params['trade_logic']['yahoo_period_big_EMA'],logger=logger)
+
+    return df_data 
 
 class Stocks:
     def __init__(self,
@@ -46,6 +56,7 @@ class Stocks:
                 bought_stocks={},
                 monitored_stocks=[],
                 monitored_stock_data={},
+                archive=[],
                 current_status={}):
         '''
         balance : current balance. I.e. money in account ready to spend.
@@ -77,22 +88,31 @@ class Stocks:
                 "final_result" : ""
                 "timestamp_bought" : ""
                 "timestamp_sold" : ""
-                "market_open" : ""
+                "market_state" : ""
                 "timestamp_updated" : ""
                 "description" : ""
                 }
             }   
-        tosell : 
-            ['ticker1','ticker2',...]
+        archive : 
+            [
+                {
+                    'ticker': ...,
+                    'timestamp_bought' : ...,
+                    'timestamp_sold' : ...,
+                    'net_profit_loss' : ...
+                },
+                ...
+            ]
         '''
         self.balance=balance
         self.bought_stocks=bought_stocks
         self.monitored_stocks=monitored_stocks
         self.monitored_stock_data=monitored_stock_data
+        self.archive=archive
         self.current_status=current_status
 
-    def initialize_stocks(self,logger,update_nasdaq_file=False):
-        FUNCTION='get_stocks_to_monitor'
+    def initialize_stocks(self,logger,config_params,update_nasdaq_file=False):
+        FUNCTION='initialize_stocks'
         '''
         1) find interesting stocks
         2) initialize data for found list in 1)
@@ -112,20 +132,12 @@ class Stocks:
 
         tickers=list(df.Symbol)
 
-        yah=YahooAPI()
         scraper=YahooScraper()
         result=[]
-        for ticker in tickers[:NUMBER_OF_STOCKS_TO_MONITOR]:
+        for ticker in tickers[:config_params['trade_logic']['number_of_stocks_to_monitor']]:
             logger.debug("Checking {}".format(ticker),extra={'function':FUNCTION})
 
-            exchange=scraper.get_exchange(ticker,logger)
-            start_day=utils.get_start_business_date(exchange,YAHOO_PERIOD_HISTORIC_DATA,logger)
-            days_in_past=(datetime.now(pytz.timezone('UTC'))-start_day).days+2
-
-            start=datetime.strftime(datetime.now()-timedelta(days=days_in_past),'%Y/%m/%d-%H:%M:%S')
-            end=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
-
-            df_data=yah.get_data(ticker,start,end,YAHOO_INTERVAL,YAHOO_PERIOD_SMALL_EMA,YAHOO_PERIOD_BIG_EMA,logger=logger)
+            df_data=get_latest_data(ticker,config_params,logger)
 
             if df_data.empty:
                 logger.error("No data was received from the yahooAPI",extra={'function':FUNCTION})
@@ -133,19 +145,19 @@ class Stocks:
 
             big_EMAs=df_data.bigEMA
 
-            if len(big_EMAs)<NUMBER_OF_BIG_EMAS_THRESHOLD:
-                logger.debug("Ticker: {}. There weren't enough bigEMA measurements ({} vs required {}) to make a decision".format(ticker,len(big_EMAs),NUMBER_OF_BIG_EMAS_THRESHOLD),extra={'function':FUNCTION})
+            if len(big_EMAs)<config_params['trade_logic']['number_of_big_EMAs_threshold']:
+                logger.debug("Ticker: {}. There weren't enough bigEMA measurements ({} vs required {}) to make a decision".format(ticker,len(big_EMAs),config_params['trade_logic']['number_of_big_EMAs_threshold']),extra={'function':FUNCTION})
                 continue
 
             D,A=utils.get_deriv_surf(big_EMAs,logger)
             logger.debug("Ticker: {}. Derivative: {} and surface indicator: {}.".format(ticker,D,A),extra={'function':FUNCTION})
 
-            if abs(D)>BIG_EMA_DERIVATIVE_THRESHOLD:
-                logger.debug("Ticker: {}. Derivative is too steep ({} vs required {})".format(ticker,abs(D),BIG_EMA_DERIVATIVE_THRESHOLD),extra={'function':FUNCTION})
+            if abs(D)>config_params['trade_logic']['big_EMA_derivative_threshold']:
+                logger.debug("Ticker: {}. Derivative is too steep ({} vs required {})".format(ticker,abs(D),config_params['trade_logic']['big_EMA_derivative_threshold']),extra={'function':FUNCTION})
                 continue
 
-            if A>SURFACE_INDICATOR_THRESHOLD:
-                logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(ticker,A,SURFACE_INDICATOR_THRESHOLD),extra={'function':FUNCTION})
+            if A>config_params['trade_logic']['surface_indicator_threshold']:
+                logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(ticker,A,config_params['trade_logic']['surface_indicator_threshold']),extra={'function':FUNCTION})
                 continue
 
             # TODO implement algorithm to select which stocks to monitor       
@@ -156,11 +168,7 @@ class Stocks:
 
                 self.monitored_stock_data[ticker]=df_data.to_dict(orient='list')
 
-                market_open="UNKNOWN"
-                if scraper.check_if_market_open(ticker,logger)==True:
-                    market_open="YES"
-                elif scraper.check_if_market_open(ticker,logger)==False:
-                    market_open="NO"
+                market_state=scraper.check_market_state(ticker,logger=logger)
 
                 self.current_status[ticker]={"fullname":scraper.get_fullname(ticker,logger),
                                             "number":"-",
@@ -172,7 +180,7 @@ class Stocks:
                                             "final_result":"-",
                                             "timestamp_bought":"-",
                                             "timestamp_sold":"-",
-                                            "market_open":market_open,
+                                            "market_state":market_state,
                                             "timestamp_updated":utils.date_now_flutter(),
                                             "description":scraper.get_description(ticker,logger)}
 
@@ -183,44 +191,17 @@ class Stocks:
         logger.info("Initialized {} stocks".format(len(result)),extra={'function':FUNCTION})
         return True
 
-    def initialize_monitored_stocks(self,stocks,logger):
-        FUNCTION='initialize_monitored_stocks'
-        '''
-        Initialize the current status of the stocks we are going to monitor.
-        '''
-        scraper=YahooScraper()
-        yahapi=YahooAPI()
-        number=0
-
-        for stock in stocks:
-
-
-
-
-
-
-            start=datetime.strftime(datetime.now()-timedelta(days=YAHOO_PERIOD_HISTORIC_DATA),'%Y/%m/%d-%H:%M:%S')
-            end=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
-            df_data=yahapi.get_data(stock,start,end,YAHOO_INTERVAL,YAHOO_PERIOD_SMALL_EMA,YAHOO_PERIOD_BIG_EMA)
-            if df_data.empty:
-                logger.error("Stock {}: No valid dataframe was received from the yahooAPI".format(stock),extra={'function':FUNCTION})
-                continue
-
-            number+=1
-            self.monitored_stock_data[stock]=df_data.to_dict(orient='list')
-
-        logger.info("Initialized {} stocks.".format(number),extra={'function':FUNCTION})
-
-
-
-    def check_monitored_stock(self,stock,logger):
+    def check_monitored_stock(self,stock,config_params,logger):
         FUNCTION='check_monitored_stock'
         '''
         This function checks in on a stock that is being monitored.
         '''
         stock_bought=(stock in self.bought_stocks)
 
-        data=self.monitored_stock_data[stock]
+        # TODO update data correctly
+        df_data=get_latest_data(stock,config_params,logger)
+        data=df_data.to_dict(orient='list')
+        #data=self.monitored_stock_data[stock]
         smallEMAs=data['smallEMA']
         bigEMAs=data['bigEMA']
 
@@ -229,6 +210,8 @@ class Stocks:
         price_to_buy=round(data['high'][-1],2)
         price_to_sell=round(data['low'][-1],2)
         price_current_value=round((data['open'][-1]+data['close'][-1])/2,2)
+
+        # TODO update current status better (virtual result)
 
         # 1) If the stock is not bought and undervalued, buy it
         if stock_bought and undervalued:
@@ -252,12 +235,12 @@ class Stocks:
                 latest_timestamp=data['timestamps'][-1]
 
             latency=latest_timestamp-datetime.now()
-            if latency>timedelta(seconds=YAHOO_LATENCY_THRESHOLD):
+            if latency>timedelta(seconds=config_params['trade_logic']['yahoo_latency_threshold']):
                 # latest data from yahoo is not valid anymore
-                logger.error("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,YAHOO_LATENCY_THRESHOLD),extra={'function':FUNCTION})
+                logger.error("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,config_params['trade_logic']['yahoo_latency_threshold']),extra={'function':FUNCTION})
                 pass
 
-            number_to_buy=round(MONEY_TO_SPEND/price_to_buy,2)
+            number_to_buy=round(config_params['trade_logic']['money_to_spend']/price_to_buy,2)
             money_spent=round(number_to_buy*price_to_buy,2)
 
             self.bought_stocks[stock]=(number_to_buy,money_spent)
@@ -287,8 +270,8 @@ class Stocks:
                 latest_timestamp=data['timestamps'][-1]
 
             latency=latest_timestamp-datetime.now()
-            if latency>timedelta(seconds=YAHOO_LATENCY_THRESHOLD):
-                logger.error("Stock {} was not sold because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,YAHOO_LATENCY_THRESHOLD),extra={'function':FUNCTION})
+            if latency>timedelta(seconds=config_params['trade_logic']['yahoo_latency_threshold']):
+                logger.error("Stock {} was not sold because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,config_params['trade_logic']['yahoo_latency_threshold']),extra={'function':FUNCTION})
                 return False
 
             value_bought=self.current_status[stock]["value_bought"]
@@ -302,6 +285,14 @@ class Stocks:
             self.current_status[stock]["final_result"]=current_value-value_bought
             self.current_status[stock]["timestamp_sold"]=utils.date_now_flutter()
             self.current_status[stock]["timestamp_updated"]=utils.date_now_flutter()
+
+            new_archive={
+                'ticker':stock,
+                'timestamp_bought':self.current_status[stock]["timestamp_bought"],
+                'timestamp_sold':utils.date_now_flutter(),
+                'net_profit_loss':current_value-value_bought
+            }
+            self.archive.append(new_archive)
 
             logger.info("All stocks of {} were sold for a total of ${}".format(stock,current_value),extra={'function':FUNCTION})
 
@@ -371,7 +362,16 @@ class Stocks:
         for ticker in data:
             df=pd.DataFrame(data[ticker])
 
-            print(df)
+            delta=df['timestamps'].iloc[1]-df['timestamps'].iloc[0]
+            timestamps=df.timestamps
+            delta=timedelta(minutes=1)
+            for i in range(len(timestamps)-1):
+                if timestamps.iloc[i].date()==timestamps.iloc[i+1].date():
+                    delta=timestamps.iloc[i+1]-timestamps.iloc[i]
+                    break
+
+            df=df.resample(delta,on='timestamps').last().fillna(np.nan)
+            df=df.drop(columns='timestamps').reset_index()
 
             if df.empty:
                 logger.error("No valid data for monitored stock {}".format(ticker),extra={'function':FUNCTION})
@@ -388,15 +388,16 @@ class Stocks:
             plt.rcParams.update({'axes.titleweight': 'roman'})
             ax.xaxis_date()
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d-%H:%M:%S'))
+
             plt.xticks(rotation=45)
             plt.grid(True)
 
             plt.title("Stock data for {}".format(ticker),pad=18)
             plt.ylabel("Stock prices [USD]",labelpad=10)
             
-            ax.scatter(x_dates,y_close,c='tab:olive',marker='.',alpha=0.4,linewidths=0.8,label="Closes")
-            ax.scatter(x_dates,y_smallEMA,c='tab:green',marker='.',alpha=0.4,linewidths=0.8,label="smallEMA")
-            ax.scatter(x_dates,y_bigEMA,c='tab:red',marker='.',alpha=0.4,linewidths=0.8,label="bigEMA")
+            ax.plot(x_dates,y_close,c='tab:blue',marker=',',alpha=1,linewidth=1.2,label="Closes")
+            ax.plot(x_dates,y_smallEMA,c='tab:cyan',marker=',',alpha=1,linewidth=1.2,label="smallEMA")
+            ax.plot(x_dates,y_bigEMA,c='tab:purple',marker=',',alpha=1,linewidth=1.2,label="bigEMA")
 
             ax.legend()
 
@@ -413,7 +414,7 @@ class Stocks:
             plt.cla()
             plt.close()
 
-    def get_overview(self,logger,market_open=True):
+    def get_overview(self,logger,algo_running="Yes"):
         FUNCTION='get_overview'
         '''
         This function gets the total overview of the current status, in the following form:
@@ -425,22 +426,29 @@ class Stocks:
         '''
         total_final_result=0
         total_virtual_result=0
+        number_of_stocks_monitored=0
         number_of_stocks_owned=0
         data=self.current_status
+
         for key in data:
-            number_of_stocks_owned+=1
+            number_of_stocks_monitored+=1
+            if data[key]["bought"]=="YES":
+                number_of_stocks_owned+=1
+
             if data[key]['virtual_result']!="-" and data[key]['final_result']=="-":
                 total_virtual_result+=float(data[key]['virtual_result'])
             elif data[key]['final_result']!="-":
                 total_final_result+=float(data[key]['final_result'])
 
-        algo_running=""
-        if market_open:
-            algo_running="Yes"
-        else:
-            algo_running="No"
+        result={
+            'algorithm_running':algo_running,
+            'timestamp':utils.date_now_flutter(),
+            'total_virtual_result':round(total_virtual_result,2),
+            'total_final_result':round(total_final_result,2),
+            'number_of_stocks_owned':number_of_stocks_owned,
+            'number_of_stocks_monitored':number_of_stocks_monitored
+        }
 
-        result={'algorithm_running':algo_running,'timestamp':utils.date_now_flutter(),'total_virtual_result':round(total_virtual_result,2),'total_final_result':round(total_final_result,2),'number_of_stocks_owned':number_of_stocks_owned}
         return result
 
 '''

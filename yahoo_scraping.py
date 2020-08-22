@@ -28,7 +28,7 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.error("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,req.url),extra={'function':FUNCTION})
+            logger.error("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
             return None
 
         if not req.status_code==200:
@@ -50,7 +50,7 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.error("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,req.url),extra={'function':FUNCTION})
+            logger.error("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
             return None
 
         if not req.status_code==200:
@@ -68,8 +68,8 @@ class YahooScraper:
 
         return MARKET_IDS[words[0]]
 
-    def check_if_market_open(self,ticker,logger):
-        FUNCTION='check_if_market_open'
+    def check_market_state(self,ticker,logger):
+        FUNCTION='check_market_state'
         '''
         Returns true if market for the provided ticker is open at this moment.
         '''
@@ -77,7 +77,7 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.error("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,req.url),extra={'function':FUNCTION})
+            logger.error("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
             return None
 
         if not req.status_code==200:
@@ -85,19 +85,24 @@ class YahooScraper:
             return None
 
         soep=Soup(req.text,'html.parser')
-        string=soep.find(text=re.compile('.*Currency in.*'))
-        words=string.replace(".","").split("-")
-        words=[word.replace(" ","") for word in words]
+        market_open=soep.find("span",text=re.compile('.*Market open.*'))
+        market_closed=soep.find("span",text=re.compile('.*At close.*'))
+        before_hours=soep.find("span",text=re.compile('.*Before hours.*'))
+        after_hours=soep.find("span",text=re.compile('.*After hours.*'))
 
-        if not len(words)==2:
-            logger.error("Length of market information from yahoo website is not two. Text received: {}".format(string),extra={'function':FUNCTION})
-            return None
+        result="UNKNOWN"
+        if market_open:
+            result="OPEN"
+        elif market_closed and before_hours:
+            result="BEFORE_HOURS"
+        elif market_closed and after_hours:
+            result="AFTER_HOURS"
+        elif market_closed and not market_open and not before_hours and not after_hours:
+            result="CLOSED"
+        else:
+            logger.error("No valid combination: market_open {}, market_closed {}, before_hours {}, after_hours {}".format(market_open,market_closed,before_hours,after_hours),extra={'function':FUNCTION})
 
-        cal=mcal.get_calendar(MARKET_IDS[words[0]])
-        dt_now=datetime.now()
-        schema = cal.schedule(start_date=datetime.strftime(dt_now-timedelta(days=1),'%Y-%m-%d'),end_date=datetime.strftime(dt_now+timedelta(days=1),'%Y-%m-%d'))
-
-        return cal.open_at_time(schema, datetime.now(tz=timezone.utc))
+        return result
 
     def all_markets_closed(self,bought_stocks,logger):
         FUNCTION='all_markets_closed'
@@ -105,7 +110,7 @@ class YahooScraper:
         This function returns True if all relevant stock markets are closed at this moment.
         '''
         for ticker in bought_stocks.keys():
-            if self.check_if_market_open(ticker,logger):
+            if self.check_market_state(ticker,logger)!="CLOSED":
                 return False
 
         main_markets=["NASDAQ","NYSE"]
@@ -131,7 +136,7 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.error("Ticker: {}. No valid response was returned from the yahooAPI with url ({})".format(ticker,req.url),extra={'function':FUNCTION},exc_info=True)
+            logger.error("Ticker: {}. No valid response was returned from the yahooAPI with url ({})".format(ticker,url),extra={'function':FUNCTION},exc_info=False)
             return description
 
         if not req.status_code==200:
@@ -144,7 +149,7 @@ class YahooScraper:
         try:
             description=des_tag.parent.parent.next_sibling.get_text()
         except:
-            logger.error("Ticker: {}. Error in get_text function".format(ticker),extra={'function':FUNCTION},exc_info=True)
+            logger.error("Ticker: {}. Error in get_text function".format(ticker),extra={'function':FUNCTION},exc_info=False)
             return description
 
         return description

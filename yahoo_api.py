@@ -18,9 +18,11 @@ class YahooAPI:
         'index' | 'timestamps' | 'open' | 'close' | 'low' | 'high' | 'volume'
 
         start and end inputs given in CEST timezone
-        timestamps in df are given in EDT timezone
+        timestamps in df are given in UTC timezone
         '''
         url=self.base_url+"/v8/finance/chart/{}".format(ticker)
+
+        logger.debug("Ticker: {}. Getting data from {} until {}".format(ticker,start,end),extra={'function':FUNCTION})
 
         start_datetime=datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
         end_datetime=datetime.strptime(end,'%Y/%m/%d-%H:%M:%S')
@@ -30,10 +32,12 @@ class YahooAPI:
         start_unix=int((start_datetime-first_unix).total_seconds())-2*3600
         end_unix=int((end_datetime-first_unix).total_seconds())-2*3600
 
-        req=requests.get(url,params={'symbol':ticker,'period1':start_unix,'period2':end_unix,'interval':interval})
+        logger.debug("Ticker: {}. Start unix: {}, end unix: {}".format(ticker,start_unix,end_unix),extra={'function':FUNCTION})
+
+        req=requests.get(url,params={'symbol':ticker,'period1':start_unix,'period2':end_unix,'interval':interval,'includePrePost':'true'})
 
         if req.status_code!=200:
-            logger.error("Ticker: {}. No valid response was received from the yahoo query ({}).".format(ticker,req.url),extra={'function':FUNCTION})
+            logger.error("Ticker: {}. No valid response was received from the yahoo query ({}).".format(ticker,url),extra={'function':FUNCTION})
             return pd.DataFrame
 
         json_data=json.loads(req.text)
@@ -125,9 +129,6 @@ class YahooAPI:
 
         df=pd.concat([df_base,df_smallEMA,df_bigEMA],axis=1,join='outer').reset_index()
         df.drop('index',axis=1,inplace=True,errors='ignore')
-
-        print("GLENNY get data")
-        print(df)
 
         return df
 
