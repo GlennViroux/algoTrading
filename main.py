@@ -15,6 +15,12 @@ commands_parser=reqparse.RequestParser()
 commands_parser.add_argument("tickers",type=str,help="Ticker of which you want to sell all currently owned stocks.")
 commands_parser.add_argument("commands",type=str,help="General commands you want to pass.")
 
+config_parser=reqparse.RequestParser()
+config_parser.add_argument("main",type=str,help="Post a new config value for main. Example: str(seconds_to_sleep:30).")
+config_parser.add_argument("trade_logic",type=str,help="Post a new config value for trade_logic. Example: str(seconds_to_sleep:30).")
+config_parser.add_argument("logging",type=str,help="Post a new config value for logging. Example: str(seconds_to_sleep:30).")
+
+
 global start_time
 start_time=time.time()
 
@@ -48,11 +54,51 @@ class GetInfo(Resource):
 
         abort(404,message="This operation is not allowed.")
 
+class ConfigCommands(Resource):
+    config_file="./config/config.json"
+
+    def get(self):
+        config_data=utils.read_json_data(self.config_file)
+        if not config_data:
+            abort(404,message="No valid config file found.")
         
+        dirname=os.path.dirname(self.config_file)
+        filename=os.path.basename(self.config_file)
+        return send_from_directory(dirname,filename,attachment_filename=filename)
+
+    def post(self):
+        config_data=utils.read_json_data(self.config_file)
+        if not config_data:
+            abort(404,message="No valid config file found.")
+
+        args=config_parser.parse_args()
+        args_dict=dict(args)
+
+        for key in args_dict:
+            if not args_dict[key]:
+                continue
+
+            if not key in config_data:
+                abort(404,message="Category {} is not valid.".format(key))
+
+            pair=args_dict[key].split(':')
+            if not len(pair)==2:
+                abort(404,message="No valid config value provided. Format is str(parameter:value).")
+            
+            config_data[key][pair[0]]=pair[1]
+
+        utils.write_json(config_data,self.config_file)
+
+        return config_data,200
+
+
 class Commands(Resource):
     def post(self):
         global start_time
         commands_log=utils.get_latest_log("COMMANDS")
+        if not commands_log:
+            utils.initialize_json_file(OUTPUT_DIR_COMMANDS)
+            commands_log=OUTPUT_DIR_COMMANDS
         existing_data=utils.read_json_data(commands_log)
         tickers=[]
         commands=[]
@@ -115,8 +161,9 @@ def start_server():
     api.add_resource(Plot,"/plots/<string:ticker>")
     api.add_resource(Retrieve,"/retrieve/<string:data_id>")
     api.add_resource(GetInfo,"/info/<string:info_id>")
+    api.add_resource(ConfigCommands,"/config/")
 
-    app.run(debug=True,host='192.168.43.91',port=5050)
+    app.run(debug=True,host='192.168.0.21',port=5050)
 
 if __name__ == "__main__":
     start_server()

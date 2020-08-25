@@ -132,18 +132,6 @@ class YahooAPI:
 
         return df
 
-'''
-yah=YahooAPI()
-start_time=datetime.strftime(datetime.now()-timedelta(days=7),'%Y/%m/%d-%H:%M:%S')
-end_time=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
-
-print("From (CEST) {} until {}".format(start_time,end_time))
-df=yah.get_historic_data("AAPL",start_time,end_time,"1m")
-#print(df)
-#print(df.dtypes)
-print(df.to_dict(orient='list'))
-'''
-
 
 
 

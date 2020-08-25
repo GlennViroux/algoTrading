@@ -81,7 +81,7 @@ class YahooScraper:
             return None
 
         if not req.status_code==200:
-            logger.error("Ticker: {}. No valid resonse was obtained from the yahoo website. Status code: {}. Response: {}".format(ticker,req.status_code,req.text),extra={'function':FUNCTION})
+            logger.error("Ticker: {}. No valid resonse was obtained from the yahoo website. \n\nUrl: {} \n\nStatus code: {}. \n\nResponse: {}".format(ticker,req.url,req.status_code,req.text),extra={'function':FUNCTION})
             return None
 
         soep=Soup(req.text,'html.parser')
@@ -120,7 +120,7 @@ class YahooScraper:
             schema = cal.schedule(start_date=datetime.strftime(dt_now-timedelta(days=1),'%Y-%m-%d'),end_date=datetime.strftime(dt_now+timedelta(days=1),'%Y-%m-%d'))
 
             if (cal.open_at_time(schema, datetime.now(tz=timezone.utc))):
-                logger.debug("Exchange {} is open.",extra={'function':FUNCTION})
+                logger.debug("Exchange {} is open.".format(market),extra={'function':FUNCTION})
                 return False
 
         logger.debug("Markets {} and {} are closed.".format(main_markets[0],main_markets[1]),extra={'function':FUNCTION})

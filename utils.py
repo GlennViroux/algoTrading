@@ -181,6 +181,7 @@ def write_state(stocks,path,logger):
     except:
         logger.error("Unable to write config. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
+
 ### RETRIEVE/READ DATA AND FILES ###
 def get_latest_log(keyword,logger=None):
     FUNCTION='get_latest_log'
@@ -197,9 +198,39 @@ def get_plot(ticker):
         return None
     return max(list_of_files, key=os.path.getctime)
 
+def read_config(config_file,logger=None):
+    #FUNCTION='read_config'
+    json_data=read_json_data(config_file,logger=logger)
+    result={}
+    result['main']={}
+    result['trade_logic']={}
+    result['logging']={}
+
+    result['main']['seconds_to_sleep']=int(json_data['main']["seconds_to_sleep"])
+    result['main']['plot_data']=(json_data['main']['plot_data']=="true")
+    result['main']['ignore_market_hours']=(json_data['main']['ignore_market_hours']=="true")
+
+    result['trade_logic']['money_to_spend']=float(json_data['trade_logic']['money_to_spend'])
+    result['trade_logic']['yahoo_latency_threshold']=float(json_data['trade_logic']['yahoo_latency_threshold'])
+    result['trade_logic']['yahoo_interval']=json_data['trade_logic']['yahoo_interval']
+    result['trade_logic']['yahoo_period_small_EMA']=int(json_data['trade_logic']['yahoo_period_small_EMA'])
+    result['trade_logic']['yahoo_period_big_EMA']=int(json_data['trade_logic']['yahoo_period_big_EMA'])
+    result['trade_logic']['yahoo_period_historic_data']=int(json_data['trade_logic']['yahoo_period_historic_data'])
+    result['trade_logic']['number_of_stocks_to_monitor']=int(json_data['trade_logic']['number_of_stocks_to_monitor'])
+    result['trade_logic']['number_of_big_EMAs_threshold']=int(json_data['trade_logic']['number_of_big_EMAs_threshold'])
+    result['trade_logic']['big_EMA_derivative_threshold']=float(json_data['trade_logic']['big_EMA_derivative_threshold'])
+    result['trade_logic']['surface_indicator_threshold']=float(json_data['trade_logic']['surface_indicator_threshold'])
+    result['trade_logic']['respect_market_hours']=(json_data['trade_logic']['surface_indicator_threshold']=="true")
+
+    result['logging']['level_console']=json_data['logging']['level_console']
+    result['logging']['level_file']=json_data['logging']['level_file']
+
+    return result
+
 def read_json_data(file_path,logger=None):
     FUNCTION='read_json_data'
     if not file_path:
+        logger.error("No file found.",extra={'function':FUNCTION})
         return {}
     try:
         with safe_open(file_path,"r") as f:
@@ -208,8 +239,10 @@ def read_json_data(file_path,logger=None):
     except:
         if logger:
             logger.error("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+            return {}
         else:
             print("Unable to read json data. Exception occured.")
+            return {}
 
 def read_commands(log,logger=None):
     commands=read_json_data(log,logger)
@@ -218,6 +251,11 @@ def read_commands(log,logger=None):
     if not 'commands' in commands:
         commands['commands']=[]
     return commands
+
+def initialize_json_file(file_path,logger=None):
+    #FUNCTION='initialize_json_file'
+    with safe_open(file_path,"w") as f:
+        f.write("\{\}")
 
 
 ### PYTHON SOCKET PROGRAMMING ###
