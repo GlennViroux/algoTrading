@@ -37,14 +37,18 @@ class YahooAPI:
         req=requests.get(url,params={'symbol':ticker,'period1':start_unix,'period2':end_unix,'interval':interval,'includePrePost':'true'})
 
         if req.status_code!=200:
-            logger.error("Ticker: {}. No valid response was received from the yahoo query ({}).".format(ticker,url),extra={'function':FUNCTION})
+            logger.warning("Ticker: {}. No valid response was received from the yahoo query ({}).".format(ticker,url),extra={'function':FUNCTION})
             return pd.DataFrame
 
         json_data=json.loads(req.text)
 
         gmtoffset=int(json_data['chart']['result'][0]['meta']['gmtoffset'])
 
-        timestamps = [first_unix+timedelta(seconds=int(t)+gmtoffset) for t in json_data['chart']['result'][0]['timestamp']]
+        try:
+            timestamps = [first_unix+timedelta(seconds=int(t)+gmtoffset) for t in json_data['chart']['result'][0]['timestamp']]
+        except KeyError:
+            logger.warning("Ticker: {}. No valid data (KeyError when getting timestamps) was obtained from the yahooAPI".format(ticker),extra={'function':FUNCTION})
+            return pd.DataFrame
 
         df_dict={'timestamps':timestamps,
                  'open':json_data['chart']['result'][0]['indicators']['quote'][0]['open'],
@@ -78,7 +82,7 @@ class YahooAPI:
 
         # 1) Calculate first SMA
         if len(timestamps)<=period:
-            logger.error("Ticker: {}. Length of data from yahooAPI ({}) was smaller than requested EMA period ({}).".format(ticker,len(timestamps),period),extra={'function':FUNCTION})
+            logger.warning("Ticker: {}. Length of data from yahooAPI ({}) was smaller than requested EMA period ({}).".format(ticker,len(timestamps),period),extra={'function':FUNCTION})
             return pd.DataFrame
 
         SMA=0
@@ -113,17 +117,19 @@ class YahooAPI:
         'index' | 'timestamps' | 'open' | 'close' | 'low' | 'high' | 'volume' | 'smallEMA' | 'bigEMA'
         '''
         df_data=self.get_historic_data(ticker,start,end,interval,logger=logger)
+        if df_data.empty:
+            return df_data
         df_base=df_data.set_index('timestamps')
 
         df_smallEMA=self.calculate_EMAs(ticker,start,end,interval,period_small_EMA,smallEMA=True,df_historic_data=df_data,logger=logger)
         if df_smallEMA.empty:
-            logger.error("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_small_EMA),extra={'function':FUNCTION})
+            logger.warning("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_small_EMA),extra={'function':FUNCTION})
             return pd.DataFrame
         df_smallEMA=df_smallEMA.set_index('timestamps')
 
         df_bigEMA=self.calculate_EMAs(ticker,start,end,interval,period_big_EMA,smallEMA=False,df_historic_data=df_data,logger=logger)
         if df_bigEMA.empty:
-            logger.error("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_big_EMA),extra={'function':FUNCTION})
+            logger.warning("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_big_EMA),extra={'function':FUNCTION})
             return pd.DataFrame
         df_bigEMA=df_bigEMA.set_index('timestamps')
 

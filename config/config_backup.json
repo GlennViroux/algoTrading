@@ -1,0 +1,25 @@
+{
+    "main": {
+        "seconds_to_sleep": "30",
+        "plot_data": "false"
+    },
+    "trade_logic": {
+        "money_to_spend": "500",
+        "yahoo_latency_threshold": "20",
+        "yahoo_interval": "5m",
+        "yahoo_period_small_EMA": "50",
+        "yahoo_period_big_EMA": "200",
+        "yahoo_period_historic_data": "5",
+        "number_of_stocks_to_monitor": "2",
+        "number_of_big_EMAs_threshold": "300",
+        "big_EMA_derivative_threshold": "0.01",
+        "surface_indicator_threshold": "10"
+    },
+    "logging":{
+        "level_console":"DEBUG",
+        "level_file":"DEBUG"
+    }
+}
+
+
+

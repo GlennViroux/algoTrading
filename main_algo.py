@@ -58,7 +58,7 @@ def update_state(stocks,logger):
     utils.write_state(stocks,ENDING_STATE_PATH,logger=logger)
     sh.copy(ENDING_STATE_PATH,"./config/latest_state.json")
     logger.debug("Written and copied ending state",extra={'function':FUNCTION})
-    
+
 
 def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
     FUNCTION='main'
@@ -120,6 +120,12 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
         for stock in stocks.monitored_stocks:
             stocks.check_monitored_stock(stock,config_params=config_params,logger=logger)
         logger.debug("Checked all monitored stocks",extra={'function':FUNCTION})
+
+        # Check if we should monitor more stocks
+        logger.debug("Checking if we should monitor more stocks...",extra={'function':FUNCTION})
+        stocks.check_to_monitor_new_stocks(config_params,logger)
+        logger.debug("Checked if we should monitor more stocks",extra={'function':FUNCTION})
+
 
         # Plot data per monitored stock
         if config_params['main']['plot_data']:

@@ -115,7 +115,7 @@ def write_json(data,path,logger=None):
             f.write(json.dumps(data,indent=2))
     except:
         if logger:
-            logger.error("Unable to write json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+            logger.warning("Unable to write json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 def write_plotdata(monitored_stock_data,path,logger):
     FUNCTION='write_plotdata'
@@ -156,7 +156,7 @@ def write_plotdata(monitored_stock_data,path,logger):
         with safe_open(path,"w") as f:
             f.write(json.dumps(result,indent=2))
     except:
-        logger.error("Unable to write plotdata. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+        logger.warning("Unable to write plotdata. Exception occured.",extra={'function':FUNCTION},exc_info=True)
         
 def write_state(stocks,path,logger):
     FUNCTION='write_state'
@@ -179,7 +179,7 @@ def write_state(stocks,path,logger):
         with safe_open(path,"w") as f:
             f.write(json.dumps(result,indent=2))
     except:
-        logger.error("Unable to write config. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+        logger.warning("Unable to write config. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 
 ### RETRIEVE/READ DATA AND FILES ###
@@ -188,7 +188,7 @@ def get_latest_log(keyword,logger=None):
     list_of_files=glob.glob('./output/ALGO_{}_LOG*'.format(keyword))
     if not list_of_files:
         if logger:
-            logger.error("No file found for keyword {}".format(keyword),extra={'function':FUNCTION})
+            logger.warning("No file found for keyword {}".format(keyword),extra={'function':FUNCTION})
         return None
     return max(list_of_files, key=os.path.getctime)
 
@@ -230,7 +230,7 @@ def read_config(config_file,logger=None):
 def read_json_data(file_path,logger=None):
     FUNCTION='read_json_data'
     if not file_path:
-        logger.error("No file found.",extra={'function':FUNCTION})
+        logger.warning("No file found.",extra={'function':FUNCTION})
         return {}
     try:
         with safe_open(file_path,"r") as f:
@@ -238,7 +238,7 @@ def read_json_data(file_path,logger=None):
         return json.loads(data)
     except:
         if logger:
-            logger.error("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+            logger.warning("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
             return {}
         else:
             print("Unable to read json data. Exception occured.")
@@ -320,7 +320,7 @@ def get_deriv_surf(input,logger):
     input_list=list(input.dropna())
 
     if not input_list:
-        logger.error("An empty or no valid input list is provided",extra={'function':FUNCTION})
+        logger.warning("An empty or no valid input list is provided",extra={'function':FUNCTION})
         return None
 
     Ay=input_list[0]
@@ -358,7 +358,7 @@ def configure_logger(name,output_log,config_params):
         'version':1,
         'formatters': {
             'default': {
-                'format': "[%(asctime)s] - [%(levelname)-8s] - [%(function)-25s] - %(message)s", 
+                'format': "[%(asctime)s] - [%(levelname)-8s] - [%(function)-30s] - %(message)s", 
                 'datefmt': "%Y/%m/%d-%H:%M:%S"
             }
         },

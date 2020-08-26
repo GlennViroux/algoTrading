@@ -163,7 +163,7 @@ def start_server():
     api.add_resource(GetInfo,"/info/<string:info_id>")
     api.add_resource(ConfigCommands,"/config/")
 
-    app.run(debug=True,host='192.168.0.21',port=5050)
+    app.run(debug=False,host='192.168.0.21',port=5050)
 
 if __name__ == "__main__":
     start_server()

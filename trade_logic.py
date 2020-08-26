@@ -64,7 +64,9 @@ class Stocks:
                 monitored_stocks=[],
                 monitored_stock_data={},
                 archive=[],
-                current_status={}):
+                current_status={},
+                interesting_stocks=[],
+                not_interesting_stocks=[]):
         '''
         balance : current balance. I.e. money in account ready to spend.
         bought stocks : { ticker : (number of stocks in possesion , money spent when buying the stocks)}    
@@ -118,6 +120,156 @@ class Stocks:
         self.monitored_stock_data=monitored_stock_data
         self.archive=archive
         self.current_status=current_status
+        self.interesting_stocks=interesting_stocks
+        self.not_interesting_stocks=not_interesting_stocks
+
+    def get_new_interesting_stock(self,logger):
+        FUNCTION='get_new_interesting_stock'
+        '''
+        Return a new interesting stock which is currently not monitored and excludiding any manually 
+        passed stocks.
+        '''
+        result=""
+        for stock in self.interesting_stocks:
+            if stock in self.not_interesting_stocks:
+                continue
+            if stock in self.monitored_stocks:
+                continue
+            result=stock
+
+        if not result:
+            logger.error("No new interesting stock was found :(",extra={'function':FUNCTION})
+
+        return result
+
+    def accept_new_stock(self,stock,df_data,config_params,logger):
+        FUNCTION='accept_new_stock'
+        '''
+        Check if we will monitor the given stock.
+        '''
+        big_EMAs=df_data.bigEMA
+
+        if len(big_EMAs)<config_params['trade_logic']['number_of_big_EMAs_threshold']:
+            logger.debug("Ticker: {}. There weren't enough bigEMA measurements ({} vs required {}) to make a decision".format(stock,len(big_EMAs),config_params['trade_logic']['number_of_big_EMAs_threshold']),extra={'function':FUNCTION})
+            self.not_interesting_stocks.append(stock)
+            return False,0,0
+
+        D,A=utils.get_deriv_surf(big_EMAs,logger)
+        logger.debug("Ticker: {}. Derivative: {} and surface indicator: {}.".format(stock,D,A),extra={'function':FUNCTION})
+
+        if abs(D)>config_params['trade_logic']['big_EMA_derivative_threshold']:
+            logger.debug("Ticker: {}. Derivative is too steep ({} vs required {})".format(stock,abs(D),config_params['trade_logic']['big_EMA_derivative_threshold']),extra={'function':FUNCTION})
+            self.not_interesting_stocks.append(stock)
+            return False,0,0
+
+        if A>config_params['trade_logic']['surface_indicator_threshold']:
+            logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(stock,A,config_params['trade_logic']['surface_indicator_threshold']),extra={'function':FUNCTION})
+            self.not_interesting_stocks.append(stock)
+            return False,0,0
+
+        return True,D,A
+
+    def add_new_stock(self,stock,df_data,exchange,D,A,fullname,description,market_state,logger):
+        #FUNCTION='add_new_stock'
+        '''
+        Add new stock
+        '''
+        if not stock in self.monitored_stocks:
+            self.monitored_stocks.append(stock)
+
+        self.monitored_stock_data[stock]=df_data.to_dict(orient='list')
+
+        if stock in self.current_status:
+            data=df_data.to_dict(orient='list')
+            latest_prices=get_latest_prices(stock,data)
+            timestamp_data=latest_prices[0]
+            #price_to_sell=latest_prices[1]
+            #price_to_buy=latest_prices[2]
+            price_current_value=latest_prices[3]
+            number=self.current_status[stock]["number"]
+            if number=="-":
+                current_value="-"
+            else:
+                current_value=round(price_current_value*number,2)
+
+            value_bought=self.current_status[stock]["value_bought"]
+            if value_bought=="-" or number=="-":
+                virtual_result="-"
+            else:
+                virtual_result=round(price_current_value*number-value_bought,2)
+
+            self.current_status[stock]["timestamp_updated"]=utils.date_now_flutter()
+            self.current_status[stock]["timestamp_data"]=timestamp_data
+            self.current_status[stock]["value_current"]=current_value
+            self.current_status[stock]["virtual_result"]=virtual_result
+            self.current_status[stock]["market_status"]=market_state
+        else:
+            self.current_status[stock]={"fullname":fullname,
+                                        "number":"-",
+                                        "bought":"NO",
+                                        "value_bought":"-",
+                                        "value_current":"-",
+                                        "value_sold":"-",
+                                        "virtual_result":"-",
+                                        "final_result":"-",
+                                        "timestamp_bought":"-",
+                                        "timestamp_sold":"-",
+                                        "market_state":market_state,
+                                        "timestamp_updated":utils.date_now_flutter(),
+                                        "timestamp_data":"-",
+                                        "description":description,
+                                        "exchange":exchange,
+                                        "derivative_factor":round(D,8),
+                                        "surface_factor":round(A,8)}
+
+    def check_to_monitor_new_stocks(self,config_params,logger):
+        FUNCTION='check_to_monitor_new_stocks'
+        '''
+        Check if we should add a new stock to monitor
+        '''
+        while len(self.monitored_stocks)<config_params['trade_logic']['number_of_stocks_to_monitor']:
+            ticker=self.get_new_interesting_stock(logger)
+            
+            logger.debug("Checking {}".format(ticker),extra={'function':FUNCTION})
+            scraper=YahooScraper()
+            exchange=scraper.get_exchange(ticker,logger)
+            if not exchange:
+                self.not_interesting_stocks.append(ticker)
+                logger.warning("Ticker {} was skipped because no valid response was received from the get_exchange function.".format(ticker),extra={'function':FUNCTION})
+                continue
+
+            df_data=get_latest_data(ticker,exchange,config_params,logger)
+
+            if df_data.empty:
+                self.not_interesting_stocks.append(ticker)
+                logger.warning("No data was received from the yahooAPI",extra={'function':FUNCTION})
+                continue
+
+            accept=self.accept_new_stock(ticker,df_data,config_params,logger)
+            if not accept[0]:
+                continue
+            D=accept[1]
+            A=accept[2]
+
+            fullname=scraper.get_fullname(ticker,logger)
+            if not fullname:
+                self.not_interesting_stocks.append(ticker)
+                logger.warning("Ticker {} was skipped because no valid response was received from the get_fullname function.".format(ticker),extra={'function':FUNCTION})
+                continue
+
+            description=scraper.get_description(ticker,logger)
+            if not description:
+                self.not_interesting_stocks.append(ticker)
+                logger.warning("Ticker {} was skipped because no valid response was received from the get_description function.".format(ticker),extra={'function':FUNCTION})
+                continue
+
+            market_state=scraper.check_market_state(ticker,logger=logger)
+            if not market_state:
+                self.not_interesting_stocks.append(ticker)
+                logger.warning("Ticker {} was skipped because no valid response was received from the check_market_state function.".format(ticker),extra={'function':FUNCTION})
+                continue
+
+            self.add_new_stock(ticker,df_data,exchange,D,A,fullname,description,market_state,logger)
 
     def initialize_stocks(self,logger,config_params,update_nasdaq_file=False):
         FUNCTION='initialize_stocks'
@@ -138,98 +290,11 @@ class Stocks:
         df=pd.read_csv(file,delimiter='|')
         df.drop(df.tail(1).index,inplace=True)
 
-        tickers=list(df.Symbol)
+        self.interesting_stocks=list(df.Symbol)
 
-        scraper=YahooScraper()
-        result=[]
-        for ticker in tickers[:config_params['trade_logic']['number_of_stocks_to_monitor']]:
-            logger.debug("Checking {}".format(ticker),extra={'function':FUNCTION})
+        self.check_to_monitor_new_stocks(config_params,logger)
 
-            scraper=YahooScraper()
-            exchange=scraper.get_exchange(ticker,logger)
-            if not exchange:
-                logger.error("Ticker {} was skipped because no valid response was received from the get_exchange function.".format(ticker),extra={'function':FUNCTION})
-                continue
-
-            df_data=get_latest_data(ticker,exchange,config_params,logger)
-
-            if df_data.empty:
-                logger.error("No data was received from the yahooAPI",extra={'function':FUNCTION})
-                continue
-
-            big_EMAs=df_data.bigEMA
-
-            if len(big_EMAs)<config_params['trade_logic']['number_of_big_EMAs_threshold']:
-                logger.debug("Ticker: {}. There weren't enough bigEMA measurements ({} vs required {}) to make a decision".format(ticker,len(big_EMAs),config_params['trade_logic']['number_of_big_EMAs_threshold']),extra={'function':FUNCTION})
-                continue
-
-            D,A=utils.get_deriv_surf(big_EMAs,logger)
-            logger.debug("Ticker: {}. Derivative: {} and surface indicator: {}.".format(ticker,D,A),extra={'function':FUNCTION})
-
-            if abs(D)>config_params['trade_logic']['big_EMA_derivative_threshold']:
-                logger.debug("Ticker: {}. Derivative is too steep ({} vs required {})".format(ticker,abs(D),config_params['trade_logic']['big_EMA_derivative_threshold']),extra={'function':FUNCTION})
-                continue
-
-            if A>config_params['trade_logic']['surface_indicator_threshold']:
-                logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(ticker,A,config_params['trade_logic']['surface_indicator_threshold']),extra={'function':FUNCTION})
-                continue
-
-            # TODO implement algorithm to select which stocks to monitor       
-            to_monitor=True
-            if to_monitor:
-                if not ticker in self.monitored_stocks:
-                    self.monitored_stocks.append(ticker)
-
-                self.monitored_stock_data[ticker]=df_data.to_dict(orient='list')
-
-                market_state=scraper.check_market_state(ticker,logger=logger)
-
-                if ticker in self.current_status:
-                    data=df_data.to_dict(orient='list')
-                    latest_prices=get_latest_prices(ticker,data)
-                    timestamp_data=latest_prices[0]
-                    #price_to_sell=latest_prices[1]
-                    #price_to_buy=latest_prices[2]
-                    price_current_value=latest_prices[3]
-                    number=self.current_status[ticker]["number"]
-                    if number=="-":
-                        current_value="-"
-                    else:
-                        current_value=round(price_current_value*number,2)
-
-                    value_bought=self.current_status[ticker]["value_bought"]
-                    if value_bought=="-" or number=="-":
-                        virtual_result="-"
-                    else:
-                        virtual_result=round(price_current_value*number-value_bought,2)
-
-                    self.current_status[ticker]["timestamp_updated"]=utils.date_now_flutter()
-                    self.current_status[ticker]["timestamp_data"]=timestamp_data
-                    self.current_status[ticker]["value_current"]=current_value
-                    self.current_status[ticker]["virtual_result"]=virtual_result
-                    self.current_status[ticker]["market_status"]=market_state
-                else:
-                    self.current_status[ticker]={"fullname":scraper.get_fullname(ticker,logger),
-                                                "number":"-",
-                                                "bought":"NO",
-                                                "value_bought":"-",
-                                                "value_current":"-",
-                                                "value_sold":"-",
-                                                "virtual_result":"-",
-                                                "final_result":"-",
-                                                "timestamp_bought":"-",
-                                                "timestamp_sold":"-",
-                                                "market_state":market_state,
-                                                "timestamp_updated":utils.date_now_flutter(),
-                                                "timestamp_data":"-",
-                                                "description":scraper.get_description(ticker,logger),
-                                                "exchange":exchange}
-
-
-            logger.debug("Adding {} to the list of stocks to be monitored".format(ticker),extra={'function':FUNCTION})
-            result.append(ticker)
-
-        logger.info("Initialized {} stocks".format(len(result)),extra={'function':FUNCTION})
+        logger.info("Initialized stocks",extra={'function':FUNCTION})
         return True
 
     def buy_stock(self,stock,money_to_spend,price_to_buy,timestamp_data,logger):
@@ -267,7 +332,7 @@ class Stocks:
         latency=latest_timestamp-datetime.now()
         if latency>timedelta(seconds=threshold):
             # latest data from yahoo is not valid anymore
-            logger.error("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,threshold),extra={'function':FUNCTION})
+            logger.warning("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,threshold),extra={'function':FUNCTION})
             return False
             
         return True
@@ -276,7 +341,7 @@ class Stocks:
         FUNCTION='sell_stock'
 
         if not stock in self.bought_stocks:
-            logger.error("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(stock),extra={'function':FUNCTION})
+            logger.warning("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(stock),extra={'function':FUNCTION})
             return False
 
         value_bought=self.current_status[stock]["value_bought"]
@@ -393,7 +458,7 @@ class Stocks:
         to_remove=[]
         for ticker in tickers:
             if not ticker in self.current_status or self.current_status[ticker]["bought"]=="NO":
-                logger.error("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),extra={'function':FUNCTION})
+                logger.warning("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),extra={'function':FUNCTION})
                 to_remove.append(ticker)
                 continue
 
@@ -401,7 +466,7 @@ class Stocks:
 
             df_data=get_latest_data(ticker,exchange,config_params,logger)
             if df_data.empty:
-                logger.error("Ticker {}. Unable to obtain latest data, ticker is not sold.".format(ticker),extra={'function':FUNCTION})
+                logger.warning("Ticker {}. Unable to obtain latest data, ticker is not sold.".format(ticker),extra={'function':FUNCTION})
                 continue
 
             data=df_data.to_dict(orient='list')
@@ -448,7 +513,7 @@ class Stocks:
             df=df.drop(columns='timestamps').reset_index()
 
             if df.empty:
-                logger.error("No valid data for monitored stock {}".format(ticker),extra={'function':FUNCTION})
+                logger.warning("No valid data for monitored stock {}".format(ticker),extra={'function':FUNCTION})
                 continue
 
             x_dates=pd.to_datetime(df.timestamps)
