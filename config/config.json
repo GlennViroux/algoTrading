@@ -1,6 +1,6 @@
 {
   "main": {
-    "seconds_to_sleep": "60",
+    "seconds_to_sleep": "120",
     "plot_data": "false",
     "ignore_market_hours": "true"
   },

@@ -264,7 +264,7 @@ class Stocks:
                 continue
 
             market_state=scraper.check_market_state(ticker,logger=logger)
-            if not market_state:
+            if market_state=="UNKNOWN":
                 self.not_interesting_stocks.append(ticker)
                 logger.warning("Ticker {} was skipped because no valid response was received from the check_market_state function.".format(ticker),extra={'function':FUNCTION})
                 continue

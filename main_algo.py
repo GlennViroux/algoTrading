@@ -143,8 +143,9 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
                 break
         else:
             scraper=YahooScraper()
-            if (scraper.all_markets_closed(stocks.bought_stocks,logger) and not config_params['main']['ignore_market_hours']) or ("STOPALGORITHM" in commands['commands']):
-                commands['commands'].remove("STOPALGORITHM")
+            if (scraper.all_markets_closed(stocks.monitored_stocks,logger) and not config_params['main']['ignore_market_hours']) or ("STOPALGORITHM" in commands['commands']):
+                if "STOPALGORITHM" in commands['commands']:
+                    commands['commands'].remove("STOPALGORITHM")
                 utils.write_json(commands,commands_log,logger=logger)
                 logger.info("Terminating algorithm because all relevant markets are closed or it was instructed by the user",extra={'function':FUNCTION})
                 stocks.current_status=utils.close_markets(stocks.current_status)

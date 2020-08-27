@@ -74,15 +74,16 @@ class YahooScraper:
         Returns true if market for the provided ticker is open at this moment.
         '''
         url=self.base_url+"quote/{}".format(ticker.upper())
+        result="UNKNOWN"
         try:
             req=requests.get(url)
         except:
             logger.warning("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
-            return None
+            return result
 
         if not req.status_code==200:
             logger.warning("Ticker: {}. No valid resonse was obtained from the yahoo website. \n\nUrl: {} \n\nStatus code: {}.".format(ticker,req.url,req.status_code),extra={'function':FUNCTION})
-            return None
+            return result
 
         soep=Soup(req.text,'html.parser')
         market_open=soep.find("span",text=re.compile('.*Market open.*'))
@@ -90,7 +91,6 @@ class YahooScraper:
         before_hours=soep.find("span",text=re.compile('.*Before hours.*'))
         after_hours=soep.find("span",text=re.compile('.*After hours.*'))
 
-        result="UNKNOWN"
         if market_open:
             result="OPEN"
         elif market_closed and before_hours:
@@ -104,26 +104,16 @@ class YahooScraper:
 
         return result
 
-    def all_markets_closed(self,bought_stocks,logger):
+    def all_markets_closed(self,all_stocks,logger):
         FUNCTION='all_markets_closed'
         '''
         This function returns True if all relevant stock markets are closed at this moment.
         '''
-        for ticker in bought_stocks.keys():
-            if self.check_market_state(ticker,logger)!="CLOSED":
+        for stock in all_stocks:
+            state=self.check_market_state(stock,logger)
+            if not state=="CLOSED":
                 return False
 
-        main_markets=["NASDAQ","NYSE"]
-        for market in main_markets:
-            cal=mcal.get_calendar(market)
-            dt_now=datetime.now()
-            schema = cal.schedule(start_date=datetime.strftime(dt_now-timedelta(days=1),'%Y-%m-%d'),end_date=datetime.strftime(dt_now+timedelta(days=1),'%Y-%m-%d'))
-
-            if (cal.open_at_time(schema, datetime.now(tz=timezone.utc))):
-                logger.debug("Exchange {} is open.".format(market),extra={'function':FUNCTION})
-                return False
-
-        logger.debug("Markets {} and {} are closed.".format(main_markets[0],main_markets[1]),extra={'function':FUNCTION})
         return True
 
     def get_description(self,ticker,logger):
@@ -156,6 +146,26 @@ class YahooScraper:
 
 
 '''
+    def all_markets_closed(self,bought_stocks,logger):
+        FUNCTION='all_markets_closed'
+        This function returns True if all relevant stock markets are closed at this moment.
+        for ticker in bought_stocks.keys():
+            if self.check_market_state(ticker,logger)!="CLOSED":
+                return False
+
+        main_markets=["NASDAQ","NYSE"]
+        for market in main_markets:
+            cal=mcal.get_calendar(market)
+            dt_now=datetime.now()
+            schema = cal.schedule(start_date=datetime.strftime(dt_now-timedelta(days=1),'%Y-%m-%d'),end_date=datetime.strftime(dt_now+timedelta(days=1),'%Y-%m-%d'))
+
+            if (cal.open_at_time(schema, datetime.now(tz=timezone.utc))):
+                logger.debug("Exchange {} is open.".format(market),extra={'function':FUNCTION})
+                return False
+
+        logger.debug("Markets {} and {} are closed.".format(main_markets[0],main_markets[1]),extra={'function':FUNCTION})
+        return True
+
     def get_bid_and_ask(self,ticker):
         
         return {'bid':bid_price,'bid_volume'=bid_volume,'ask'=ask_price,'ask_volume'=ask_volume}

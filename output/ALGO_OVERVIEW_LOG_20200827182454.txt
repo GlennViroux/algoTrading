@@ -1,0 +1,8 @@
+{
+  "algorithm_running": "Yes",
+  "timestamp": "2020-08-27 19:19:10",
+  "total_virtual_result": -89.33,
+  "total_final_result": 0,
+  "number_of_stocks_owned": 10,
+  "number_of_stocks_monitored": 15
+}
