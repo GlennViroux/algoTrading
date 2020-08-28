@@ -152,18 +152,21 @@ class Commands(Resource):
         utils.write_json(result,OUTPUT_DIR_COMMANDS)
         return result,200
 
+class Glenny(Resource):
+    def get(self):
+        return {},200
 
-def start_server():
-    app=Flask(__name__)
-    api=Api(app)
+application=Flask(__name__)
+api=Api(application)
 
-    api.add_resource(Commands,"/commands/")
-    api.add_resource(Plot,"/plots/<string:ticker>")
-    api.add_resource(Retrieve,"/retrieve/<string:data_id>")
-    api.add_resource(GetInfo,"/info/<string:info_id>")
-    api.add_resource(ConfigCommands,"/config/")
+api.add_resource(Commands,"/commands/")
+api.add_resource(Plot,"/plots/<string:ticker>")
+api.add_resource(Retrieve,"/retrieve/<string:data_id>")
+api.add_resource(GetInfo,"/info/<string:info_id>")
+api.add_resource(ConfigCommands,"/config/")
+api.add_resource(Glenny,"/glenny/")
 
-    app.run(debug=False,host='192.168.0.21',port=5050)
+
 
 if __name__ == "__main__":
-    start_server()
+    application.run()
