@@ -220,7 +220,6 @@ def read_config(config_file,logger=None):
     result['trade_logic']['number_of_big_EMAs_threshold']=int(json_data['trade_logic']['number_of_big_EMAs_threshold'])
     result['trade_logic']['big_EMA_derivative_threshold']=float(json_data['trade_logic']['big_EMA_derivative_threshold'])
     result['trade_logic']['surface_indicator_threshold']=float(json_data['trade_logic']['surface_indicator_threshold'])
-    result['trade_logic']['respect_market_hours']=(json_data['trade_logic']['surface_indicator_threshold']=="true")
 
     result['logging']['level_console']=json_data['logging']['level_console']
     result['logging']['level_file']=json_data['logging']['level_file']

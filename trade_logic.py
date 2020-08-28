@@ -398,13 +398,13 @@ class Stocks:
         undervalued=(smallEMAs[-1]<bigEMAs[-1])
 
         # TODO update current status better (virtual result)
-        if market_state=="CLOSED" and config_params['trade_logic']['respect_market_hours']:
+        if market_state=="CLOSED" and not config_params['main']['ignore_market_hours']:
             logger.info("No checks were performed because the market for {} is closed.".format(stock),extra={'function':FUNCTION})
             return True
 
         if stock_bought and undervalued:
             # UPDATE AND PASS
-            logger.info("Stock {} is bought and undervalued => update and pass.".format(stock),extra={'function':FUNCTION})
+            logger.debug("Stock {} is bought and undervalued => update and pass.".format(stock),extra={'function':FUNCTION})
             number_stocks_owned=self.bought_stocks[stock][0]
             value_bought=self.current_status[stock]["value_bought"]
 
@@ -413,29 +413,33 @@ class Stocks:
             self.current_status[stock]["timestamp_data"]=timestamp_data
             self.current_status[stock]["timestamp_updated"]=utils.date_now_flutter()
 
+            self.monitored_stock_data[stock]=df_data.to_dict(orient='list')
+
         elif (not stock_bought) and (not undervalued):
             # PASS
-            logger.info("Stock {} is not bought and overvalued => pass.".format(stock),extra={'function':FUNCTION})
+            logger.debug("Stock {} is not bought and overvalued => pass.".format(stock),extra={'function':FUNCTION})
             pass
         elif (not stock_bought) and undervalued:
             # BUY
             logger.info("Stock {} is not bought and undervalued => buy.".format(stock),extra={'function':FUNCTION})
             mytime=data['timestamps'][-1]
             latency_check=self.check_yahoo_latency(stock,mytime,config_params['trade_logic']['yahoo_latency_threshold'],logger)
-            if not latency_check:
-                pass
+            if latency_check:
+                self.buy_stock(stock,config_params['trade_logic']['money_to_spend'],price_to_buy,timestamp_data,logger)
+            else:
+                logger.info("Stock {} was not bought because it didn't pass the latency check.",extra={'function':FUNCTION})
 
-            self.buy_stock(stock,config_params['trade_logic']['money_to_spend'],price_to_buy,timestamp_data,logger)
         elif stock_bought and (not undervalued):
             # SELL
             logger.info("Stock {} is bought and overvalued => sell.".format(stock),extra={'function':FUNCTION})
             mytime=data['timestamps'][-1]
             
             latency_check=self.check_yahoo_latency(stock,mytime,config_params['trade_logic']['yahoo_latency_threshold'],logger)
-            if not latency_check:
-                pass
+            if latency_check:
+                self.sell_stock(stock,price_to_sell,timestamp_data,logger)
+            else:
+                logger.info("Stock {} is not sold because it did't pass the latency check.",extra={'function':FUNCTION})
 
-            self.sell_stock(stock,price_to_sell,timestamp_data,logger)
         # This next option should never occur.
         else:
             logger.error("Strange combination",extra={'function':FUNCTION})
@@ -576,8 +580,9 @@ class Stocks:
 
             if data[key]['virtual_result']!="-" and data[key]['final_result']=="-":
                 total_virtual_result+=float(data[key]['virtual_result'])
-            elif data[key]['final_result']!="-":
-                total_final_result+=float(data[key]['final_result'])
+
+        for key in self.archive:
+            total_final_result+=self.archive[key]["net_profit_loss"]
 
         result={
             'algorithm_running':algo_running,

@@ -14,8 +14,7 @@
     "number_of_stocks_to_monitor": "15",
     "number_of_big_EMAs_threshold": "300",
     "big_EMA_derivative_threshold": "0.01",
-    "surface_indicator_threshold": "10",
-    "respect_market_hours": "false"
+    "surface_indicator_threshold": "10"
   },
   "logging": {
     "level_console": "DEBUG",
