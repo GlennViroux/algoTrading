@@ -105,7 +105,7 @@ class YahooScraper:
         return result
 
     def all_markets_closed(self,all_stocks,logger):
-        FUNCTION='all_markets_closed'
+        #FUNCTION='all_markets_closed'
         '''
         This function returns True if all relevant stock markets are closed at this moment.
         '''
