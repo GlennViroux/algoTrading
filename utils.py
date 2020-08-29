@@ -254,10 +254,15 @@ def read_commands(log,logger=None):
         commands['commands']=[]
     return commands
 
-def initialize_json_file(file_path,logger=None):
-    #FUNCTION='initialize_json_file'
+def initialize_commands_file(file_path,logger=None):
+    #FUNCTION='initialize_commands_file'
     with safe_open(file_path,"w") as f:
-        f.write("\{\}")
+        data={
+            'tickers_to_sell':[],
+            'tickers_to_buy':[],
+            'commands':[]
+        }
+        f.write(json.dumps(data,indent=2))
 
 
 ### PYTHON SOCKET PROGRAMMING ###

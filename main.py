@@ -12,7 +12,8 @@ OUTPUT_DIR="./output/"
 OUTPUT_DIR_COMMANDS=OUTPUT_DIR+"ALGO_COMMANDS_LOG_{}.txt".format(utils.date_now_filename())
 
 commands_parser=reqparse.RequestParser()
-commands_parser.add_argument("tickers",type=str,help="Ticker of which you want to sell all currently owned stocks.")
+commands_parser.add_argument("tickers_to_sell",type=str,help="Ticker of which you want to sell all currently owned stocks.")
+commands_parser.add_argument("tickers_to_buy",type=str,help="Ticker of which you want to some stocks.")
 commands_parser.add_argument("commands",type=str,help="General commands you want to pass.")
 
 config_parser=reqparse.RequestParser()
@@ -97,14 +98,18 @@ class Commands(Resource):
         global start_time
         commands_log=utils.get_latest_log("COMMANDS")
         if not commands_log:
-            utils.initialize_json_file(OUTPUT_DIR_COMMANDS)
+            utils.initialize_commands_file(OUTPUT_DIR_COMMANDS)
             commands_log=OUTPUT_DIR_COMMANDS
         existing_data=utils.read_json_data(commands_log)
-        tickers=[]
+        tickers_to_sell=[]
+        tickers_to_buy=[]
         commands=[]
         if existing_data:
-            if len(existing_data['tickers'])>0:
-                tickers=existing_data['tickers']
+            if len(existing_data['tickers_to_sell'])>0:
+                tickers_to_sell=existing_data['tickers_to_sell']
+
+            if len(existing_data['tickers_to_buy'])>0:
+                tickers_to_sell=existing_data['tickers_to_buy']
 
             if len(existing_data['commands'])>0:
                 commands=existing_data['commands']
@@ -112,10 +117,15 @@ class Commands(Resource):
         args=commands_parser.parse_args()
 
         args_dict=dict(args)
-        tickers.append(args_dict['tickers'])
-        commands.append(args_dict['commands'])
+        if 'tickers_to_sell' in args_dict:
+            tickers_to_sell.append(args_dict['tickers_to_sell'])
+        if 'tickers_to_buy' in args_dict:
+            tickers_to_buy.append(args_dict['tickers_to_buy'])
+        if 'commands' in args_dict:
+            commands.append(args_dict['commands'])
+
         if "SELLALL" in commands:
-            tickers.append("ALLSTOCKS")
+            tickers_to_sell.append("ALLSTOCKS")
 
         if "CLEANSTARTALGORITHM" in commands:
             for thread in threading.enumerate():
@@ -145,10 +155,11 @@ class Commands(Resource):
             if not algo_running:
                 abort(404,message="Algorithm isn't running at this moment.")
 
-        tickers=[ticker for ticker in tickers if ticker]
+        tickers_to_sell=[ticker for ticker in tickers_to_sell if ticker]
+        tickers_to_buy=[ticker for ticker in tickers_to_buy if ticker]
         commands=[command for command in commands if command]
 
-        result={'tickers':list(set(tickers)),'commands':list(set(commands))}
+        result={'tickers_to_sell':list(set(tickers_to_sell)),'tickers_to_buy':list(set(tickers_to_buy)),'commands':list(set(commands))}
         utils.write_json(result,OUTPUT_DIR_COMMANDS)
         return result,200
 

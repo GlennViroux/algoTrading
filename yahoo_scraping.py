@@ -71,7 +71,7 @@ class YahooScraper:
             result=MARKET_IDS[words[0]]
         except KeyError:
             result=words[0]
-            
+             
         return result
 
     def check_market_state(self,ticker,logger):

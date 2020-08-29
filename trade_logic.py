@@ -334,7 +334,7 @@ class Stocks:
         df=pd.read_csv(file,delimiter='|')
         df.drop(df.tail(1).index,inplace=True)
 
-        self.interesting_stocks=set(list(df.Symbol))
+        self.interesting_stocks=list(set(df.Symbol))
 
         self.check_to_monitor_new_stocks(config_params,logger)
 
@@ -424,7 +424,6 @@ class Stocks:
         self.current_status[stock]["market_state"]=market_state
         exchange=self.current_status[stock]["exchange"]
 
-        # TODO update data correctly
         df_data=self.get_latest_data(stock,exchange,config_params,logger)
         if df_data.empty:
             return False
@@ -494,7 +493,7 @@ class Stocks:
         This function checks whether the user has ordered to sell certain stocks using the app,
         and sells them.
         '''
-        tickers=commands['tickers']
+        tickers=commands['tickers_to_sell']
         remove_all_stocks=False
         if "ALLSTOCKS" in tickers:
             remove_all_stocks=True
@@ -535,7 +534,56 @@ class Stocks:
             commands['tickers']=[]
         else:
             for ticker in to_remove:
-                commands['tickers'].remove(ticker)
+                commands['tickers_to_sell'].remove(ticker)
+
+        utils.write_json(commands,command_log,logger=logger)
+
+    def hard_buy_check(self,commands,command_log,config_params,logger):
+        FUNCTION='hard_buy_check'
+        '''
+        This function checks whether the user has ordered to buy certain stocks using the app,
+        and buys them.
+        '''
+        tickers=commands['tickers_to_buy']
+
+        if not tickers:
+            return True
+
+        to_remove=[]
+        for ticker in tickers:
+            if not ticker in self.monitored_stocks or self.current_status[ticker]["bought"]=="YES":
+                logger.warning("Trying to sell stocks from {}, but no stocks from this company are monitored atm or they are already bought.".format(ticker),extra={'function':FUNCTION})
+                to_remove.append(ticker)
+                continue
+
+            scraper=YahooScraper()
+            market_state=scraper.check_market_state(ticker,logger=logger)
+            self.current_status[ticker]["market_state"]=market_state
+            exchange=self.current_status[ticker]["exchange"]
+
+            df_data=self.get_latest_data(ticker,exchange,config_params,logger)
+            if df_data.empty:
+                return False
+
+            data=df_data.to_dict(orient='list')
+            latest_prices=get_latest_prices(ticker,data)
+            timestamp_data=latest_prices[0]
+            price_to_buy=latest_prices[2]
+
+            mytime=data['timestamps'][-1]
+            latency_check=self.check_yahoo_latency(ticker,mytime,config_params['trade_logic']['yahoo_latency_threshold'],logger)
+            success=False
+            if latency_check:
+                self.buy_stock(ticker,config_params['trade_logic']['money_to_spend'],price_to_buy,timestamp_data,logger)
+                success=True
+            else:
+                logger.info("Stock {} was not bought because it didn't pass the latency check.",extra={'function':FUNCTION})
+
+            if success:
+                to_remove.append(ticker)
+
+        for ticker in to_remove:
+            commands['tickers_to_buy'].remove(ticker)
 
         utils.write_json(commands,command_log,logger=logger)
 

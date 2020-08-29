@@ -116,10 +116,11 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
 
         # Read and save whether the user has ordered manually to sell a certain stock, and if true, sell it
         commands_log=utils.get_latest_log("COMMANDS",logger=logger)
-        commands={'commands':[],'tickers':[]}
+        commands={'commands':[],'tickers_to_sell':[],'tickers_to_buy':[]}
         if commands_log:
             commands=utils.read_commands(commands_log,logger=logger)
-            stocks.hard_sell_check(commands,commands_log,config_params,logger=logger)
+            stocks.hard_sell_check(commands,commands_log,config_params,logger)
+            stocks.hard_buy_check(commands,commands_log,config_params,logger)
 
         # Loop through monitored stocks
         logger.debug("Checking monitored stocks...",extra={'function':FUNCTION})
