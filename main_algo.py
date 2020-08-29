@@ -32,6 +32,9 @@ def update_state(stocks,logger):
     '''
     Write the current state to the latest_state json file.
     '''
+    # Initialize yahoo_calls if not done already
+    stocks.update_yahoo_calls(add_call=False,logger=logger)
+
     # Write current overview
     logger.debug("Writing overview...",extra={'function':FUNCTION})
     utils.write_json(stocks.get_overview(logger=logger),OUTPUT_DIR_OVERVIEW,logger=logger)
@@ -43,10 +46,10 @@ def update_state(stocks,logger):
     logger.debug("Written current status",extra={'function':FUNCTION})
 
     # Write archive data
-    logger.debug("Writing current archive...",extra={'function':FUNCTION})
+    logger.debug("Writing current archives...",extra={'function':FUNCTION})
     d={'data':stocks.archive}
     utils.write_json(d,OUTPUT_DIR_ARCHIVE,logger=logger)
-    logger.debug("Written current archive",extra={'function':FUNCTION})
+    logger.debug("Written current archives",extra={'function':FUNCTION})
 
     # Write plotdata for all monitored stocks
     logger.debug("Writing plotdata...",extra={'function':FUNCTION})
@@ -88,7 +91,10 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
                     monitored_stocks=init_val["monitored_stocks"],
                     current_status=init_val["current_status"],
                     monitored_stock_data=init_val["monitored_stock_data"],
-                    archive=init_val["archive"])
+                    archive=init_val["archive"],
+                    interesting_stocks=init_val["interesting_stocks"],
+                    not_interesting_stocks=init_val["not_interesting_stocks"],
+                    yahoo_calls=init_val["yahoo_calls"])
 
     # Initialize status files
     update_state(stocks,logger)

@@ -9,7 +9,7 @@ from yahoo_scraping import YahooScraper
 from ticker_alpha import Alpha
 import utils
 from yahoo_api import YahooAPI
-from datetime import datetime,timedelta
+from datetime import date,time,datetime,timedelta
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -27,23 +27,6 @@ PREV_STOCKS_CHECKED=15
 ALPHA_INTRADAY_INTERVAL='30min'
 ALPHA_EMA_INTERVAL='30min'
 '''
-
-def get_latest_data(ticker,exchange,config_params,logger):
-    #FUNCTION='get_latest_data'
-    '''
-    Description
-    '''
-    yah=YahooAPI()
-
-    start_day=utils.get_start_business_date(exchange,config_params['trade_logic']['yahoo_period_historic_data'],logger)
-    days_in_past=(datetime.now(pytz.timezone('UTC'))-start_day).days+1
-
-    start=datetime.strftime(datetime.now()-timedelta(days=days_in_past),'%Y/%m/%d-%H:%M:%S')
-    end=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
-
-    df_data=yah.get_data(ticker,start,end,config_params['trade_logic']['yahoo_interval'],config_params['trade_logic']['yahoo_period_small_EMA'],config_params['trade_logic']['yahoo_period_big_EMA'],logger=logger)
-
-    return df_data
 
 def get_latest_prices(stock,data):
         #FUNCTION='get_latest_values'
@@ -66,7 +49,8 @@ class Stocks:
                 archive=[],
                 current_status={},
                 interesting_stocks=[],
-                not_interesting_stocks=[]):
+                not_interesting_stocks=[],
+                yahoo_calls={}):
         '''
         balance : current balance. I.e. money in account ready to spend.
         bought stocks : { ticker : (number of stocks in possesion , money spent when buying the stocks)}    
@@ -94,9 +78,7 @@ class Stocks:
                 "value_current" : ""
                 "value_sold" : ""
                 "virtual_result" : ""
-                "final_result" : ""
                 "timestamp_bought" : ""
-                "timestamp_sold" : ""
                 "market_state" : ""
                 "timestamp_updated" : ""
                 "description" : ""
@@ -113,6 +95,15 @@ class Stocks:
                 },
                 ...
             ]
+        interesting_stocks : []
+        not_interesting_stocks : []
+        yahoo_calls : 
+            {
+                'day_timestamp' : datetime.date,
+                'hour_timestamp' : datetime.datetime,
+                'daily_calls' : ...,
+                'hourly_calls' : ...
+            }
         '''
         self.balance=balance
         self.bought_stocks=bought_stocks
@@ -122,6 +113,62 @@ class Stocks:
         self.current_status=current_status
         self.interesting_stocks=interesting_stocks
         self.not_interesting_stocks=not_interesting_stocks
+        self.yahoo_calls=yahoo_calls
+
+    def update_yahoo_calls(self,add_call,logger):
+        FUNCTION='add_yahoo_call'
+        '''
+        Add yahoo call to the records. This is done in order to check compliance with the limits.
+        '''
+        if not self.yahoo_calls:
+            self.yahoo_calls={
+                'last_timestamp_day': utils.date_now(),
+                'last_hour': datetime.now().hour,
+                'daily_calls': 0,
+                'hourly_calls': 0
+            }
+
+        data=self.yahoo_calls
+        last_date=datetime.strptime(data['last_timestamp_day'],"%Y/%m/%d-%H:%M:%S").date()
+        now=datetime.now()
+
+        if now.date()>last_date:
+            data['last_timestamp_day']=utils.date_now()
+            data['daily_calls']=1
+        elif now.date()==last_date:
+            if add_call:
+                data['daily_calls']+=1
+        else:
+            logger.error("Day present in object is after current day. Bad bad programmer, this should never occur.",extra={'function':FUNCTION})
+            
+
+        if now.hour>data['last_hour']:
+            data['last_hour']=now.hour
+            data['hourly_calls']=1
+        elif now.hour==data['last_hour']:
+            if add_call:
+                data['hourly_calls']+=1
+        else:
+            logger.error("Hour present in object is after current hour. Bad bad programmer, this should never occur.",extra={'function':FUNCTION})
+
+    def get_latest_data(self,ticker,exchange,config_params,logger):
+        #FUNCTION='get_latest_data'
+        '''
+        Description
+        '''
+        yah=YahooAPI()
+
+        start_day=utils.get_start_business_date(exchange,config_params['trade_logic']['yahoo_period_historic_data'],logger)
+        days_in_past=(datetime.now(pytz.timezone('UTC'))-start_day).days+1
+
+        start=datetime.strftime(datetime.now()-timedelta(days=days_in_past),'%Y/%m/%d-%H:%M:%S')
+        end=datetime.strftime(datetime.now(),'%Y/%m/%d-%H:%M:%S')
+
+        df_data=yah.get_data(ticker,start,end,config_params['trade_logic']['yahoo_interval'],config_params['trade_logic']['yahoo_period_small_EMA'],config_params['trade_logic']['yahoo_period_big_EMA'],logger=logger)
+
+        self.update_yahoo_calls(add_call=True,logger=logger)
+
+        return df_data
 
     def get_new_interesting_stock(self,logger):
         FUNCTION='get_new_interesting_stock'
@@ -209,11 +256,8 @@ class Stocks:
                                         "bought":"NO",
                                         "value_bought":"-",
                                         "value_current":"-",
-                                        "value_sold":"-",
                                         "virtual_result":"-",
-                                        "final_result":"-",
                                         "timestamp_bought":"-",
-                                        "timestamp_sold":"-",
                                         "market_state":market_state,
                                         "timestamp_updated":utils.date_now_flutter(),
                                         "timestamp_data":"-",
@@ -238,7 +282,7 @@ class Stocks:
                 logger.warning("Ticker {} was skipped because no valid response was received from the get_exchange function.".format(ticker),extra={'function':FUNCTION})
                 continue
 
-            df_data=get_latest_data(ticker,exchange,config_params,logger)
+            df_data=self.get_latest_data(ticker,exchange,config_params,logger)
 
             if df_data.empty:
                 self.not_interesting_stocks.append(ticker)
@@ -290,7 +334,7 @@ class Stocks:
         df=pd.read_csv(file,delimiter='|')
         df.drop(df.tail(1).index,inplace=True)
 
-        self.interesting_stocks=list(df.Symbol)
+        self.interesting_stocks=set(list(df.Symbol))
 
         self.check_to_monitor_new_stocks(config_params,logger)
 
@@ -381,7 +425,7 @@ class Stocks:
         exchange=self.current_status[stock]["exchange"]
 
         # TODO update data correctly
-        df_data=get_latest_data(stock,exchange,config_params,logger)
+        df_data=self.get_latest_data(stock,exchange,config_params,logger)
         if df_data.empty:
             return False
 
@@ -468,7 +512,7 @@ class Stocks:
 
             exchange=self.current_status[ticker]["exchange"]
 
-            df_data=get_latest_data(ticker,exchange,config_params,logger)
+            df_data=self.get_latest_data(ticker,exchange,config_params,logger)
             if df_data.empty:
                 logger.warning("Ticker {}. Unable to obtain latest data, ticker is not sold.".format(ticker),extra={'function':FUNCTION})
                 continue
@@ -578,11 +622,11 @@ class Stocks:
             if data[key]["bought"]=="YES":
                 number_of_stocks_owned+=1
 
-            if data[key]['virtual_result']!="-" and data[key]['final_result']=="-":
+            if data[key]['virtual_result']!="-":
                 total_virtual_result+=float(data[key]['virtual_result'])
 
-        for key in self.archive:
-            total_final_result+=self.archive[key]["net_profit_loss"]
+        for archive in self.archive:
+            total_final_result+=archive["net_profit_loss"]
 
         result={
             'algorithm_running':algo_running,
@@ -590,7 +634,9 @@ class Stocks:
             'total_virtual_result':round(total_virtual_result,2),
             'total_final_result':round(total_final_result,2),
             'number_of_stocks_owned':number_of_stocks_owned,
-            'number_of_stocks_monitored':number_of_stocks_monitored
+            'number_of_stocks_monitored':number_of_stocks_monitored,
+            'yahoo_daily_calls':self.yahoo_calls['daily_calls'],
+            'yahoo_hourly_calls':self.yahoo_calls['hourly_calls']
         }
 
         return result

@@ -66,7 +66,13 @@ class YahooScraper:
             logger.warning("Length of market information from yahoo website is not two.",extra={'function':FUNCTION})
             return None
 
-        return MARKET_IDS[words[0]]
+        result=""
+        try:
+            result=MARKET_IDS[words[0]]
+        except KeyError:
+            result=words[0]
+            
+        return result
 
     def check_market_state(self,ticker,logger):
         FUNCTION='check_market_state'

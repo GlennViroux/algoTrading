@@ -3,6 +3,9 @@
     "bought_stocks": {},
     "monitored_stocks": [],
     "monitored_stock_data": {},
-    "archive":[],
-    "current_status": {}
+    "archive": [],
+    "current_status": {},
+    "interesting_stocks": [],
+    "not_interesting_stocks": [],
+    "yahoo_calls": {}
 }

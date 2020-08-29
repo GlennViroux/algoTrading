@@ -162,4 +162,5 @@ api.add_resource(GetInfo,"/info/<string:info_id>")
 api.add_resource(ConfigCommands,"/config/")
 
 if __name__ == "__main__":
-    application.run()
+    #application.run()
+    application.run(debug=True,host='192.168.0.21',port=5050)

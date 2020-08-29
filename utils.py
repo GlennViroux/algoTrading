@@ -174,6 +174,9 @@ def write_state(stocks,path,logger):
     result["monitored_stock_data"]=d
     result["archive"]=stocks.archive
     result["current_status"]=stocks.current_status
+    result["interesting_stocks"]=stocks.interesting_stocks
+    result["not_interesting_stocks"]=stocks.not_interesting_stocks
+    result["yahoo_calls"]=stocks.yahoo_calls
 
     try:
         with safe_open(path,"w") as f:
