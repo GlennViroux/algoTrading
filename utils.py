@@ -238,6 +238,8 @@ def read_config(config_file,logger=None):
     result['main']['seconds_to_sleep']=int(json_data['main']["seconds_to_sleep"])
     result['main']['plot_data']=(json_data['main']['plot_data']=="true")
     result['main']['ignore_market_hours']=(json_data['main']['ignore_market_hours']=="true")
+    result['main']['include_pre_trading']=(json_data['main']['include_pre_trading']=="true")
+    result['main']['include_post_trading']=(json_data['main']['include_post_trading']=="true")
 
     result['trade_logic']['money_to_spend']=float(json_data['trade_logic']['money_to_spend'])
     result['trade_logic']['yahoo_latency_threshold']=float(json_data['trade_logic']['yahoo_latency_threshold'])

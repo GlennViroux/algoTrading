@@ -110,14 +110,18 @@ class YahooScraper:
 
         return result
 
-    def all_markets_closed(self,all_stocks,logger):
+    def all_markets_closed(self,all_stocks,config_params,logger):
         #FUNCTION='all_markets_closed'
         '''
         This function returns True if all relevant stock markets are closed at this moment.
         '''
         for stock in all_stocks:
             state=self.check_market_state(stock,logger)
-            if not state=="CLOSED":
+            if state=="OPEN":
+                return False
+            elif state=="BEFORE_HOURS" and config_params['main']['include_pre_trading']:
+                return False
+            elif state=="AFTER_HOURS" and config_params['main']['include_post_trading']:
                 return False
 
         return True

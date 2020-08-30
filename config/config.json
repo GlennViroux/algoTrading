@@ -2,7 +2,9 @@
   "main": {
     "seconds_to_sleep": "120",
     "plot_data": "false",
-    "ignore_market_hours": "true"
+    "ignore_market_hours": "false",
+    "include_pre_trading": "false",
+    "include_post_trading": "false"
   },
   "trade_logic": {
     "money_to_spend": "500",
