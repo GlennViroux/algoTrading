@@ -115,7 +115,7 @@ def write_json(data,path,logger=None):
             f.write(json.dumps(data,indent=2))
     except:
         if logger:
-            logger.warning("Unable to write json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+            logger.debug("Unable to write json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 def write_plotdata(monitored_stock_data,path,logger):
     FUNCTION='write_plotdata'
@@ -156,7 +156,7 @@ def write_plotdata(monitored_stock_data,path,logger):
         with safe_open(path,"w") as f:
             f.write(json.dumps(result,indent=2))
     except:
-        logger.warning("Unable to write plotdata. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+        logger.debug("Unable to write plotdata. Exception occured.",extra={'function':FUNCTION},exc_info=True)
         
 def write_state(stocks,path,logger):
     FUNCTION='write_state'
@@ -182,7 +182,33 @@ def write_state(stocks,path,logger):
         with safe_open(path,"w") as f:
             f.write(json.dumps(result,indent=2))
     except:
-        logger.warning("Unable to write config. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+        logger.debug("Unable to write config. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+
+def write_log_json(algolog_path,output_path,logger=None):
+    FUNCTION='write_log_json'
+    '''
+    Write log data in JSON format
+    '''
+    result=[]
+    try:
+        with safe_open(algolog_path,"r") as f:
+            for line in f:
+                elems=[elem.replace("]","").replace("[","").strip() for elem in line.split(" - ")]
+                new_elem = {
+                    "Timestamp":elems[0],
+                    "Category":elems[1],
+                    "Function":elems[2],
+                    "Info":elems[3]
+                }
+                result.append(new_elem)
+
+        with safe_open(output_path,"w") as f:
+            f.write(json.dumps(result))
+    except:
+        if logger:
+            logger.debug("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+            return []
+
 
 
 ### RETRIEVE/READ DATA AND FILES ###
@@ -191,7 +217,7 @@ def get_latest_log(keyword,logger=None):
     list_of_files=glob.glob('./output/ALGO_{}_LOG*'.format(keyword))
     if not list_of_files:
         if logger:
-            logger.warning("No file found for keyword {}".format(keyword),extra={'function':FUNCTION})
+            logger.debug("No file found for keyword {}".format(keyword),extra={'function':FUNCTION})
         return None
     return max(list_of_files, key=os.path.getctime)
 
@@ -232,7 +258,7 @@ def read_config(config_file,logger=None):
 def read_json_data(file_path,logger=None):
     FUNCTION='read_json_data'
     if not file_path:
-        logger.warning("No file found.",extra={'function':FUNCTION})
+        logger.debug("No file found.",extra={'function':FUNCTION})
         return {}
     try:
         with safe_open(file_path,"r") as f:
@@ -240,7 +266,7 @@ def read_json_data(file_path,logger=None):
         return json.loads(data)
     except:
         if logger:
-            logger.warning("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+            logger.debug("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
             return {}
         else:
             print("Unable to read json data. Exception occured.")
@@ -327,7 +353,7 @@ def get_deriv_surf(input,logger):
     input_list=list(input.dropna())
 
     if not input_list:
-        logger.warning("An empty or no valid input list is provided",extra={'function':FUNCTION})
+        logger.debug("An empty or no valid input list is provided",extra={'function':FUNCTION})
         return None
 
     Ay=input_list[0]

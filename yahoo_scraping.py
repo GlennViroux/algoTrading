@@ -28,11 +28,11 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.warning("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
+            logger.debug("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
             return None
 
         if not req.status_code==200:
-            logger.warning("Ticker: {}. No valid resonse was obtained from the yahoo website. Status code: {}".format(ticker,req.status_code),extra={'function':FUNCTION})
+            logger.debug("Ticker: {}. No valid resonse was obtained from the yahoo website. Status code: {}".format(ticker,req.status_code),extra={'function':FUNCTION})
             return None
 
         soep=Soup(req.text,'html.parser')
@@ -50,11 +50,11 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.warning("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
+            logger.debug("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
             return None
 
         if not req.status_code==200:
-            logger.warning("Ticker: {}. No valid resonse was obtained from the yahoo website. Status code: {}.".format(ticker,req.status_code),extra={'function':FUNCTION})
+            logger.debug("Ticker: {}. No valid resonse was obtained from the yahoo website. Status code: {}.".format(ticker,req.status_code),extra={'function':FUNCTION})
             return None
 
         soep=Soup(req.text,'html.parser')
@@ -63,7 +63,7 @@ class YahooScraper:
         words=[word.replace(" ","") for word in words]
 
         if not len(words)==2:
-            logger.warning("Length of market information from yahoo website is not two.",extra={'function':FUNCTION})
+            logger.debug("Length of market information from yahoo website is not two.",extra={'function':FUNCTION})
             return None
 
         result=""
@@ -84,11 +84,11 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.warning("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
+            logger.debug("Ticker: {}. Error while calling http get request from the yahoo website ({}).".format(ticker,url),extra={'function':FUNCTION})
             return result
 
         if not req.status_code==200:
-            logger.warning("Ticker: {}. No valid resonse was obtained from the yahoo website. \n\nUrl: {} \n\nStatus code: {}.".format(ticker,req.url,req.status_code),extra={'function':FUNCTION})
+            logger.debug("Ticker: {}. No valid resonse was obtained from the yahoo website. \n\nUrl: {} \n\nStatus code: {}.".format(ticker,req.url,req.status_code),extra={'function':FUNCTION})
             return result
 
         soep=Soup(req.text,'html.parser')
@@ -132,11 +132,11 @@ class YahooScraper:
         try:
             req=requests.get(url)
         except:
-            logger.warning("Ticker: {}. No valid response was returned from the yahooAPI with url ({})".format(ticker,url),extra={'function':FUNCTION},exc_info=False)
+            logger.debug("Ticker: {}. No valid response was returned from the yahooAPI with url ({})".format(ticker,url),extra={'function':FUNCTION},exc_info=False)
             return description
 
         if not req.status_code==200:
-            logger.warning("Ticker: {}. No valid response was returned from the yahooAPI. Status code: {}.".format(ticker,req.status_code),extra={'function':FUNCTION})
+            logger.debug("Ticker: {}. No valid response was returned from the yahooAPI. Status code: {}.".format(ticker,req.status_code),extra={'function':FUNCTION})
             return description
 
         soep=Soup(req.text,'html.parser')
@@ -145,7 +145,7 @@ class YahooScraper:
         try:
             description=des_tag.parent.parent.next_sibling.get_text()
         except:
-            logger.warning("Ticker: {}. Error in get_text function".format(ticker),extra={'function':FUNCTION},exc_info=False)
+            logger.debug("Ticker: {}. Error in get_text function".format(ticker),extra={'function':FUNCTION},exc_info=False)
             return description
 
         return description

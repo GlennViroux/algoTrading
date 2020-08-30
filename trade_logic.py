@@ -217,7 +217,7 @@ class Stocks:
         return True,D,A
 
     def add_new_stock(self,stock,df_data,exchange,D,A,fullname,description,market_state,logger):
-        #FUNCTION='add_new_stock'
+        FUNCTION='add_new_stock'
         '''
         Add new stock
         '''
@@ -266,6 +266,8 @@ class Stocks:
                                         "derivative_factor":round(D,8),
                                         "surface_factor":round(A,8)}
 
+        logger.info("Stock {} was added to the list of stocks to be monitored".format(stock),extra={'function':FUNCTION})
+
     def check_to_monitor_new_stocks(self,config_params,logger):
         FUNCTION='check_to_monitor_new_stocks'
         '''
@@ -279,14 +281,14 @@ class Stocks:
             exchange=scraper.get_exchange(ticker,logger)
             if not exchange:
                 self.not_interesting_stocks.append(ticker)
-                logger.warning("Ticker {} was skipped because no valid response was received from the get_exchange function.".format(ticker),extra={'function':FUNCTION})
+                logger.debug("Ticker {} was skipped because no valid response was received from the get_exchange function.".format(ticker),extra={'function':FUNCTION})
                 continue
 
             df_data=self.get_latest_data(ticker,exchange,config_params,logger)
 
             if df_data.empty:
                 self.not_interesting_stocks.append(ticker)
-                logger.warning("No data was received from the yahooAPI",extra={'function':FUNCTION})
+                logger.debug("No data was received from the yahooAPI",extra={'function':FUNCTION})
                 continue
 
             accept=self.accept_new_stock(ticker,df_data,config_params,logger)
@@ -298,19 +300,19 @@ class Stocks:
             fullname=scraper.get_fullname(ticker,logger)
             if not fullname:
                 self.not_interesting_stocks.append(ticker)
-                logger.warning("Ticker {} was skipped because no valid response was received from the get_fullname function.".format(ticker),extra={'function':FUNCTION})
+                logger.debug("Ticker {} was skipped because no valid response was received from the get_fullname function.".format(ticker),extra={'function':FUNCTION})
                 continue
 
             description=scraper.get_description(ticker,logger)
             if not description:
                 self.not_interesting_stocks.append(ticker)
-                logger.warning("Ticker {} was skipped because no valid response was received from the get_description function.".format(ticker),extra={'function':FUNCTION})
+                logger.debug("Ticker {} was skipped because no valid response was received from the get_description function.".format(ticker),extra={'function':FUNCTION})
                 continue
 
             market_state=scraper.check_market_state(ticker,logger=logger)
             if market_state=="UNKNOWN":
                 self.not_interesting_stocks.append(ticker)
-                logger.warning("Ticker {} was skipped because no valid response was received from the check_market_state function.".format(ticker),extra={'function':FUNCTION})
+                logger.debug("Ticker {} was skipped because no valid response was received from the check_market_state function.".format(ticker),extra={'function':FUNCTION})
                 continue
 
             self.add_new_stock(ticker,df_data,exchange,D,A,fullname,description,market_state,logger)
@@ -321,7 +323,7 @@ class Stocks:
         1) find interesting stocks
         2) initialize data for found list in 1)
         '''
-        logger.info("Getting stocks to monitor",extra={'function':FUNCTION})
+        logger.debug("Getting stocks to monitor",extra={'function':FUNCTION})
 
         # TODO this is only for NASDAQ!
         file='./nasdaqtraded.txt'
@@ -338,7 +340,7 @@ class Stocks:
 
         self.check_to_monitor_new_stocks(config_params,logger)
 
-        logger.info("Initialized stocks",extra={'function':FUNCTION})
+        logger.debug("Initialized stocks",extra={'function':FUNCTION})
         return True
 
     def buy_stock(self,stock,money_to_spend,price_to_buy,timestamp_data,logger):
@@ -376,7 +378,7 @@ class Stocks:
         latency=latest_timestamp-datetime.now()
         if latency>timedelta(seconds=threshold):
             # latest data from yahoo is not valid anymore
-            logger.warning("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,threshold),extra={'function':FUNCTION})
+            logger.debug("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,threshold),extra={'function':FUNCTION})
             return False
             
         return True
@@ -385,7 +387,7 @@ class Stocks:
         FUNCTION='sell_stock'
 
         if not stock in self.bought_stocks:
-            logger.warning("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(stock),extra={'function':FUNCTION})
+            logger.debug("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(stock),extra={'function':FUNCTION})
             return False
 
         value_bought=self.current_status[stock]["value_bought"]
@@ -505,7 +507,7 @@ class Stocks:
         to_remove=[]
         for ticker in tickers:
             if not ticker in self.current_status or self.current_status[ticker]["bought"]=="NO":
-                logger.warning("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),extra={'function':FUNCTION})
+                logger.debug("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),extra={'function':FUNCTION})
                 to_remove.append(ticker)
                 continue
 
@@ -513,7 +515,7 @@ class Stocks:
 
             df_data=self.get_latest_data(ticker,exchange,config_params,logger)
             if df_data.empty:
-                logger.warning("Ticker {}. Unable to obtain latest data, ticker is not sold.".format(ticker),extra={'function':FUNCTION})
+                logger.debug("Ticker {}. Unable to obtain latest data, ticker is not sold.".format(ticker),extra={'function':FUNCTION})
                 continue
 
             data=df_data.to_dict(orient='list')
@@ -552,7 +554,7 @@ class Stocks:
         to_remove=[]
         for ticker in tickers:
             if not ticker in self.monitored_stocks or self.current_status[ticker]["bought"]=="YES":
-                logger.warning("Trying to sell stocks from {}, but no stocks from this company are monitored atm or they are already bought.".format(ticker),extra={'function':FUNCTION})
+                logger.debug("Trying to sell stocks from {}, but no stocks from this company are monitored atm or they are already bought.".format(ticker),extra={'function':FUNCTION})
                 to_remove.append(ticker)
                 continue
 
@@ -609,7 +611,7 @@ class Stocks:
             df=df.drop(columns='timestamps').reset_index()
 
             if df.empty:
-                logger.warning("No valid data for monitored stock {}".format(ticker),extra={'function':FUNCTION})
+                logger.debug("No valid data for monitored stock {}".format(ticker),extra={'function':FUNCTION})
                 continue
 
             x_dates=pd.to_datetime(df.timestamps)

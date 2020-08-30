@@ -14,6 +14,7 @@ import shutil as sh
 
 OUTPUT_DIR="./output/"
 OUTPUT_DIR_LOG=OUTPUT_DIR+"ALGO_TRADING_LOG_{}.txt".format(utils.date_now_filename())
+OUTPUT_DIR_LOG_JSON=OUTPUT_DIR+"ALGO_TRADINGJSON_LOG_{}.txt".format(utils.date_now_filename())
 OUTPUT_DIR_PLOTS=OUTPUT_DIR+"plots"
 OUTPUT_DIR_STATUS=OUTPUT_DIR+"ALGO_STATUS_LOG_{}.txt".format(utils.date_now_filename())
 OUTPUT_DIR_ARCHIVE=OUTPUT_DIR+"ALGO_ARCHIVE_LOG_{}.txt".format(utils.date_now_filename())
@@ -32,6 +33,7 @@ def update_state(stocks,logger):
     '''
     Write the current state to the latest_state json file.
     '''
+    logger.info("Update state of all files...",extra={'function':FUNCTION})
     # Initialize yahoo_calls if not done already
     stocks.update_yahoo_calls(add_call=False,logger=logger)
 
@@ -56,11 +58,18 @@ def update_state(stocks,logger):
     utils.write_plotdata(stocks.monitored_stock_data,OUTPUT_DIR_PLOTDATA,logger=logger)
     logger.debug("Written plotdata",extra={'function':FUNCTION})
 
+    # Write algolog in JSON format
+    logger.debug("Writing algolog in JSON format...",extra={'function':FUNCTION})
+    utils.write_log_json(OUTPUT_DIR_LOG,OUTPUT_DIR_LOG_JSON,logger=logger)
+    logger.debug("Written algolog in JSON format",extra={'function':FUNCTION})
+
     # Write ending state and copy to config folder
     logger.debug("Writing and copying ending state...",extra={'function':FUNCTION})
     utils.write_state(stocks,ENDING_STATE_PATH,logger=logger)
     sh.copy(ENDING_STATE_PATH,"./config/latest_state.json")
     logger.debug("Written and copied ending state",extra={'function':FUNCTION})
+
+    logger.info("Updated state of all files",extra={'function':FUNCTION})
 
 
 def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
@@ -76,7 +85,7 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
     # Configure logging
     logger=utils.configure_logger("default",OUTPUT_DIR_LOG,config_params["logging"])
 
-    logger.debug("Starting algorithm.",extra={'function':FUNCTION})
+    logger.info("Starting algorithm",extra={'function':FUNCTION})
 
     # Initialize stocks object with configuration values
     if not initial_state_file:
@@ -100,9 +109,9 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
     update_state(stocks,logger)
 
     # Check which stocks to monitor
-    logger.debug("Getting and initializing list of stocks to monitor...",extra={'function':FUNCTION})
+    logger.info("Getting and initializing list of stocks to monitor...",extra={'function':FUNCTION})
     stocks.initialize_stocks(logger=logger,config_params=config_params,update_nasdaq_file=False)
-    logger.debug("Got and initialized stocks to monitor.",extra={'function':FUNCTION})
+    logger.info("Got and initialized stocks to monitor.",extra={'function':FUNCTION})
 
     # Set initial values
     stock_market_open=True
@@ -115,36 +124,37 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
         config_params=utils.read_config(config_file)
 
         # Read and save whether the user has ordered manually to sell a certain stock, and if true, sell it
+        logger.info("Checking whether user has ordered to buy or sell stocks...",extra={'function':FUNCTION})
         commands_log=utils.get_latest_log("COMMANDS",logger=logger)
         commands={'commands':[],'tickers_to_sell':[],'tickers_to_buy':[]}
         if commands_log:
             commands=utils.read_commands(commands_log,logger=logger)
             stocks.hard_sell_check(commands,commands_log,config_params,logger)
             stocks.hard_buy_check(commands,commands_log,config_params,logger)
+        logger.info("Checked whether user has ordered to buy or sell stocks",extra={'function':FUNCTION})
 
         # Loop through monitored stocks
-        logger.debug("Checking monitored stocks...",extra={'function':FUNCTION})
+        logger.info("Checking monitored stocks...",extra={'function':FUNCTION})
         for stock in stocks.monitored_stocks:
             stocks.check_monitored_stock(stock,config_params=config_params,logger=logger)
-        logger.debug("Checked all monitored stocks",extra={'function':FUNCTION})
+        logger.info("Checked all monitored stocks",extra={'function':FUNCTION})
 
         # Check if we should monitor more stocks
-        logger.debug("Checking if we should monitor more stocks...",extra={'function':FUNCTION})
+        logger.info("Checking if we should monitor more stocks...",extra={'function':FUNCTION})
         stocks.check_to_monitor_new_stocks(config_params,logger)
-        logger.debug("Checked if we should monitor more stocks",extra={'function':FUNCTION})
-
+        logger.info("Checked if we should monitor more stocks",extra={'function':FUNCTION})
 
         # Plot data per monitored stock
         if config_params['main']['plot_data']:
-            logger.debug("Plotting monitored stock data...",extra={'function':FUNCTION})
+            logger.info("Plotting monitored stock data...",extra={'function':FUNCTION})
             stocks.plot_monitored_stock_data(OUTPUT_DIR_PLOTS,logger=logger)
-            logger.debug("Plotted all monitored stock data...",extra={'function':FUNCTION})
+            logger.info("Plotted all monitored stock data...",extra={'function':FUNCTION})
 
         # Check if all markets are closed
         if fixed_rounds:
             counter+=1
             if counter>=fixed_rounds:
-                logger.debug("Terminating algorithm because of configured fixed rounds",extra={'function':FUNCTION})
+                logger.info("Terminating algorithm because of configured fixed rounds",extra={'function':FUNCTION})
                 stocks.current_status=utils.close_markets(stocks.current_status)
                 update_state(stocks,logger)
                 break
