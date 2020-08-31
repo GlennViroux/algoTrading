@@ -1,5 +1,5 @@
 {
-    "balance": 10000,
+    "balance": [10000,10000],
     "bought_stocks": {},
     "monitored_stocks": [],
     "monitored_stock_data": {},

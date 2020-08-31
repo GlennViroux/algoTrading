@@ -42,7 +42,7 @@ def get_latest_prices(stock,data):
 
 class Stocks:
     def __init__(self,
-                balance=0,
+                balance=[0,0],
                 bought_stocks={},
                 monitored_stocks=[],
                 monitored_stock_data={},
@@ -159,6 +159,9 @@ class Stocks:
         yah=YahooAPI()
 
         start_day=utils.get_start_business_date(exchange,config_params['trade_logic']['yahoo_period_historic_data'],logger)
+        if not start_day:
+            return pd.DataFrame
+            
         days_in_past=(datetime.now(pytz.timezone('UTC'))-start_day).days+1
 
         start=datetime.strftime(datetime.now()-timedelta(days=days_in_past),'%Y/%m/%d-%H:%M:%S')
@@ -362,7 +365,7 @@ class Stocks:
         self.current_status[stock]["timestamp_data"]=timestamp_data
         self.current_status[stock]["timestamp_updated"]=utils.date_now_flutter()
 
-        self.balance-=money_spent
+        self.balance[1]-=money_spent
 
         logger.info("${} worth of {} stocks were bought.".format(money_spent,stock),extra={'function':FUNCTION})
 
@@ -409,7 +412,9 @@ class Stocks:
 
         self.archive.append(new_archive)
 
-        self.balance+=current_value
+        self.balance[1]+=current_value
+
+        self.not_interesting_stocks.append(stock)
 
         logger.info("All stocks of {} were sold for a total of ${}".format(stock,current_value),extra={'function':FUNCTION})
 
@@ -663,6 +668,7 @@ class Stocks:
         '''
         total_final_result=0
         total_virtual_result=0
+        total_value_current=0
         number_of_stocks_monitored=0
         number_of_stocks_owned=0
         data=self.current_status
@@ -671,6 +677,7 @@ class Stocks:
             number_of_stocks_monitored+=1
             if data[key]["bought"]=="YES":
                 number_of_stocks_owned+=1
+                total_value_current+=data[key]["value_current"]
 
             if data[key]['virtual_result']!="-":
                 total_virtual_result+=float(data[key]['virtual_result'])
@@ -679,6 +686,9 @@ class Stocks:
             total_final_result+=archive["net_profit_loss"]
 
         result={
+            'starting_balance':self.balance[0],
+            'balance':self.balance[1],
+            'total_value_current':total_value_current,
             'algorithm_running':algo_running,
             'timestamp':utils.date_now_flutter(),
             'total_virtual_result':round(total_virtual_result,2),

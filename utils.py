@@ -379,7 +379,16 @@ def get_deriv_surf(input,logger):
     return D,A_result
 
 def get_start_business_date(exchange,input_days_in_past,logger=None):
-    cal=mcal.get_calendar(exchange)
+    FUNCTION='get_start_business_date'
+    '''
+    Get start business date
+    '''
+    try:
+        cal=mcal.get_calendar(exchange)
+    except RuntimeError:
+        if logger:
+            logger.error("Exchange {} is not recognized by pandas market calendar.".format(exchange),extra={'function':FUNCTION})
+        return None
 
     start=datetime.strftime(datetime.now()-timedelta(days=100),"%Y-%m-%d")
     end=datetime.strftime(datetime.now(),"%Y-%m-%d")

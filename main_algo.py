@@ -40,36 +40,29 @@ def update_state(stocks,logger):
     # Write current overview
     logger.debug("Writing overview...",extra={'function':FUNCTION})
     utils.write_json(stocks.get_overview(logger=logger),OUTPUT_DIR_OVERVIEW,logger=logger)
-    logger.debug("Written overview...",extra={'function':FUNCTION})
 
     # Write current status per monitored stock
     logger.debug("Writing current status...",extra={'function':FUNCTION})
     utils.write_json(stocks.current_status,OUTPUT_DIR_STATUS,logger=logger)
-    logger.debug("Written current status",extra={'function':FUNCTION})
 
     # Write archive data
     logger.debug("Writing current archives...",extra={'function':FUNCTION})
     d={'data':stocks.archive}
     utils.write_json(d,OUTPUT_DIR_ARCHIVE,logger=logger)
-    logger.debug("Written current archives",extra={'function':FUNCTION})
 
     # Write plotdata for all monitored stocks
     logger.debug("Writing plotdata...",extra={'function':FUNCTION})
     utils.write_plotdata(stocks.monitored_stock_data,OUTPUT_DIR_PLOTDATA,logger=logger)
-    logger.debug("Written plotdata",extra={'function':FUNCTION})
 
     # Write algolog in JSON format
     logger.debug("Writing algolog in JSON format...",extra={'function':FUNCTION})
     utils.write_log_json(OUTPUT_DIR_LOG,OUTPUT_DIR_LOG_JSON,logger=logger)
-    logger.debug("Written algolog in JSON format",extra={'function':FUNCTION})
 
     # Write ending state and copy to config folder
     logger.debug("Writing and copying ending state...",extra={'function':FUNCTION})
     utils.write_state(stocks,ENDING_STATE_PATH,logger=logger)
     sh.copy(ENDING_STATE_PATH,"./config/latest_state.json")
-    logger.debug("Written and copied ending state",extra={'function':FUNCTION})
 
-    logger.info("Updated state of all files",extra={'function':FUNCTION})
 
 
 def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
@@ -93,7 +86,6 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
 
     logger.debug("Reading initial values from config file: {}...".format(initial_state_file),extra={'function':FUNCTION})
     init_val=utils.read_json_data(initial_state_file,logger=logger)
-    logger.debug("Read initial values from config file: {}".format(initial_state_file),extra={'function':FUNCTION})
 
     stocks=Stocks(balance=init_val["balance"],
                     bought_stocks=init_val["bought_stocks"],
