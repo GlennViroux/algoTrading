@@ -103,7 +103,6 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
     # Check which stocks to monitor
     logger.info("Getting and initializing list of stocks to monitor...",extra={'function':FUNCTION})
     stocks.initialize_stocks(logger=logger,config_params=config_params,update_nasdaq_file=False)
-    logger.info("Got and initialized stocks to monitor.",extra={'function':FUNCTION})
 
     # Set initial values
     stock_market_open=True
@@ -123,42 +122,36 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
             commands=utils.read_commands(commands_log,logger=logger)
             stocks.hard_sell_check(commands,commands_log,config_params,logger)
             stocks.hard_buy_check(commands,commands_log,config_params,logger)
-        logger.info("Checked whether user has ordered to buy or sell stocks",extra={'function':FUNCTION})
 
         # Loop through monitored stocks
         logger.info("Checking monitored stocks...",extra={'function':FUNCTION})
         for stock in stocks.monitored_stocks:
             stocks.check_monitored_stock(stock,config_params=config_params,logger=logger)
-        logger.info("Checked all monitored stocks",extra={'function':FUNCTION})
 
         # Check if we should monitor more stocks
         logger.info("Checking if we should monitor more stocks...",extra={'function':FUNCTION})
         stocks.check_to_monitor_new_stocks(config_params,logger)
-        logger.info("Checked if we should monitor more stocks",extra={'function':FUNCTION})
 
         # Plot data per monitored stock
         if config_params['main']['plot_data']:
             logger.info("Plotting monitored stock data...",extra={'function':FUNCTION})
             stocks.plot_monitored_stock_data(OUTPUT_DIR_PLOTS,logger=logger)
-            logger.info("Plotted all monitored stock data...",extra={'function':FUNCTION})
 
         # Check if all markets are closed
         if fixed_rounds:
             counter+=1
             if counter>=fixed_rounds:
                 logger.info("Terminating algorithm because of configured fixed rounds",extra={'function':FUNCTION})
-                stocks.current_status=utils.close_markets(stocks.current_status)
-                update_state(stocks,logger)
                 break
         else:
             scraper=YahooScraper()
             if (scraper.all_markets_closed(stocks.monitored_stocks,config_params,logger) and not config_params['main']['ignore_market_hours']) or ("STOPALGORITHM" in commands['commands']):
+                logger.info("Terminating algorithm because all relevant markets are closed or it was instructed by the user",extra={'function':FUNCTION})
                 if "STOPALGORITHM" in commands['commands']:
                     commands['commands'].remove("STOPALGORITHM")
+                if config_params['main']['sell_all_before_finish']:
+                    stocks.hard_sell_check({"tickers_to_sell":["ALLSTOCKS"]},commands_log,config_params,logger)
                 utils.write_json(commands,commands_log,logger=logger)
-                logger.info("Terminating algorithm because all relevant markets are closed or it was instructed by the user",extra={'function':FUNCTION})
-                stocks.current_status=utils.close_markets(stocks.current_status)
-                update_state(stocks,logger)
                 break
 
         # Update state
@@ -169,10 +162,18 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
         logger.info("Sleeping {} seconds".format(seconds_to_sleep),extra={'function':FUNCTION})
         time.sleep(seconds_to_sleep)
 
+    # Perform final operations before terminating
+    stocks.current_status=utils.close_markets(stocks.current_status)
+    update_state(stocks,logger)
+    transactions_file=utils.get_latest_log("ARCHIVE",logger=logger)
+    status_file=utils.get_latest_log("STATUS",logger=logger)
+    overview_file=utils.get_latest_log("OVERVIEW",logger=logger)
+    utils.archive_session([transactions_file,status_file,overview_file],logger=logger)
+
     return True
 
 
-#start_algorithm(fixed_rounds=3)
+#start_algorithm(fixed_rounds=1)
 
 
 

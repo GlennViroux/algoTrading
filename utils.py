@@ -3,7 +3,6 @@
 
 import logging
 import logging.config
-import shutil
 import urllib.request as request
 from contextlib import closing
 from datetime import datetime,timedelta
@@ -103,6 +102,13 @@ def safe_open(path,option):
     mkdir_p(os.path.dirname(path))
     return open(path,option)
 
+def safe_copy(source,dest):
+    '''
+    Safe copy of file
+    '''
+    mkdir_p(os.path.dirname(dest))
+    shutil.copyfile(source,dest)
+
 
 ### WRITE DATA FOR API ###
 def write_json(data,path,logger=None):
@@ -110,12 +116,13 @@ def write_json(data,path,logger=None):
     '''
     This function writes the data (in dictionary format) in JSON format.
     '''
-    try:
-        with safe_open(path,"w") as f:
-            f.write(json.dumps(data,indent=2))
-    except:
-        if logger:
-            logger.debug("Unable to write json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+    if path:
+        try:
+            with safe_open(path,"w") as f:
+                f.write(json.dumps(data,indent=2))
+        except:
+            if logger:
+                logger.debug("Unable to write json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 def write_plotdata(monitored_stock_data,path,logger):
     FUNCTION='write_plotdata'
@@ -209,12 +216,37 @@ def write_log_json(algolog_path,output_path,logger=None):
             logger.debug("Unable to read json data. Exception occured.",extra={'function':FUNCTION},exc_info=True)
             return []
 
+def archive_session(filelist,logger):
+    FUNCTION='archive_session'
+    '''
+    Archive the file with all transactions according to its start date.
+    '''
 
+    for myfile in filelist:
+        if not os.path.isfile(myfile):
+            logger.error("File: {} doesn't exist.".format(myfile),extra={'function':FUNCTION})
+            return None
+
+        filename=os.path.basename(myfile)
+
+        filename_stripped=filename.split(".")[0]
+
+        filename_date=filename_stripped.split("_")[-1]
+        year=filename_date[:4]
+        month=filename_date[4:6]
+        day=filename_date[6:8]
+        hour=filename_date[8:10]
+        minute=filename_date[10:12]
+        second=filename_date[12:14]
+
+        destination="./past_sessions/"+year+"/"+month+"/"+day+"/"+hour+"/"+minute+"/"+second+"/"+filename
+
+        safe_copy(myfile,destination)
 
 ### RETRIEVE/READ DATA AND FILES ###
-def get_latest_log(keyword,logger=None):
+def get_latest_log(keyword,basepath="./output/",logger=None):
     FUNCTION='get_latest_log'
-    list_of_files=glob.glob('./output/ALGO_{}_LOG*'.format(keyword))
+    list_of_files=glob.glob(basepath+'ALGO_{}_LOG*'.format(keyword))
     if not list_of_files:
         if logger:
             logger.debug("No file found for keyword {}".format(keyword),extra={'function':FUNCTION})
@@ -240,6 +272,8 @@ def read_config(config_file,logger=None):
     result['main']['ignore_market_hours']=(json_data['main']['ignore_market_hours']=="true")
     result['main']['include_pre_trading']=(json_data['main']['include_pre_trading']=="true")
     result['main']['include_post_trading']=(json_data['main']['include_post_trading']=="true")
+    result['main']['sell_all_before_finish']=(json_data['main']['sell_all_before_finish']=="true")
+
 
     result['trade_logic']['money_to_spend']=float(json_data['trade_logic']['money_to_spend'])
     result['trade_logic']['yahoo_latency_threshold']=float(json_data['trade_logic']['yahoo_latency_threshold'])
@@ -251,6 +285,9 @@ def read_config(config_file,logger=None):
     result['trade_logic']['number_of_big_EMAs_threshold']=int(json_data['trade_logic']['number_of_big_EMAs_threshold'])
     result['trade_logic']['big_EMA_derivative_threshold']=float(json_data['trade_logic']['big_EMA_derivative_threshold'])
     result['trade_logic']['surface_indicator_threshold']=float(json_data['trade_logic']['surface_indicator_threshold'])
+    result['trade_logic']['EMA_surface_plus_threshold']=float(json_data['trade_logic']['EMA_surface_plus_threshold'])
+    result['trade_logic']['EMA_surface_min_threshold']=float(json_data['trade_logic']['EMA_surface_min_threshold'])
+    result['trade_logic']['number_of_EMA_crossings']=int(json_data['trade_logic']['number_of_EMA_crossings'])
 
     result['logging']['level_console']=json_data['logging']['level_console']
     result['logging']['level_file']=json_data['logging']['level_file']
@@ -291,6 +328,49 @@ def initialize_commands_file(file_path,logger=None):
             'commands':[]
         }
         f.write(json.dumps(data,indent=2))
+
+def get_dates_past_sessions():
+    '''
+    Get dates of the past sessions in flutter format
+    '''
+    result=[]
+    for t in os.walk("./past_sessions/"):
+        if t[1] or not t[2]:
+            continue
+
+        elems=t[0].split("/")
+        second=elems[-1]
+        minute=elems[-2]
+        hour=elems[-3]
+        day=elems[-4]
+        month=elems[-5]
+        year=elems[-6]
+
+        date=year+"-"+month+"-"+day+" "+hour+":"+minute+":"+second
+        result.append(date)
+
+    return result
+
+def get_past_session_file(data_id,date,logger=None):
+    FUNCTION='get_past_session_file'
+    '''
+    Get transactions done in a previous session at a specific date.
+    '''
+    if not len(date)==19:
+        if logger:
+            logger.error("Provided date: {} is not in a valid format.".format(date),extra={'function':FUNCTION})
+        return False
+
+    year=date[:4]
+    month=date[5:7]
+    day=date[8:10]
+    hour=date[11:13]
+    minute=date[14:16]
+    second=date[17:19]
+
+    path="./past_sessions/"+year+"/"+month+"/"+day+"/"+hour+"/"+minute+"/"+second+"/"
+
+    return get_latest_log(data_id,basepath=path,logger=logger)
 
 
 ### PYTHON SOCKET PROGRAMMING ###
@@ -335,6 +415,23 @@ def clean_output(output_dir,output_dir_plots):
 
     mkdir_p(output_dir_plots)
 
+def clean_previous_sessions(output_dir_prev_sessions="./past_sessions"):
+    '''
+    This function cleans the output directory (log+output plots).
+    '''
+    if not os.path.isdir(output_dir_prev_sessions):
+        mkdir_p(output_dir_prev_sessions)
+
+    for filename in os.listdir(output_dir_prev_sessions):
+        file_path = os.path.join(output_dir_prev_sessions, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
 
 ### TRADE OPERATIONS ###
 def close_markets(current_status):
@@ -377,6 +474,65 @@ def get_deriv_surf(input,logger):
     logger.debug("Bx-Ax={}, By-Ay={}, D={}, A={}, A_result={}".format(Bx-Ax,By-Ay,D,A,A_result),extra={'function':FUNCTION})
 
     return D,A_result
+
+def calculate_surfaces_EMAs(smallEMAs,bigEMAs,logger):
+    FUNCTION='calculate_surfaces_EMAs'
+    '''
+    Mathematical operations in order to characterize a stock.
+    Aplus : bigEMA higher than smallEMA
+    Amin : bigEMA smaller than smallEMA
+    '''
+    bigEMA_list=list(bigEMAs.dropna())
+    smallEMA_list=list(smallEMAs.dropna())
+
+    if not len(bigEMA_list)==len(smallEMA_list):
+        if logger:
+            logger.debug("Length of available big EMAs ({}) is not equal to length of small EMAs ({})".format(len(bigEMA_list),len(smallEMA_list)),extra={'function':FUNCTION})
+        return None
+
+    Aplus=0
+    Amin=0
+    for i in range(len(bigEMA_list)):
+        diff=bigEMA_list[i]-smallEMA_list[i]
+        if diff>=0:
+            Aplus+=diff
+        else:
+            Amin+=diff
+    
+    return Aplus,Amin
+
+def get_number_of_crossings(smallEMAs,bigEMAs,logger):
+    FUNCTION='get_number_of_crossings'
+    '''
+    Mathematical operations in order to characterize a stock.
+    Aplus : bigEMA higher than smallEMA
+    Amin : bigEMA smaller than smallEMA
+    '''
+    bigEMA_list=list(bigEMAs.dropna())
+    smallEMA_list=list(smallEMAs.dropna())
+
+    if not len(bigEMA_list)==len(smallEMA_list):
+        if logger:
+            logger.debug("Length of available big EMAs ({}) is not equal to length of small EMAs ({})".format(len(bigEMA_list),len(smallEMA_list)),extra={'function':FUNCTION})
+        return None
+
+    result=0
+    # 1 when bigEMA>=smallEMA
+    # 0 when bigEMA<smallEMA
+    cond=(bigEMA_list[0]>=smallEMA_list[0])
+    i=1
+    while i<len(bigEMA_list):
+        new_cond=(bigEMA_list[i]>=smallEMA_list[i])
+        if not new_cond==cond:
+            cond=new_cond
+            result+=1
+            i+=10
+        else:
+            i+=1
+
+    logger.debug("Number of EMA crossings: {}".format(result),extra={'function':FUNCTION})
+
+    return result
 
 def get_start_business_date(exchange,input_days_in_past,logger=None):
     FUNCTION='get_start_business_date'

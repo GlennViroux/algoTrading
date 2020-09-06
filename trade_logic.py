@@ -40,6 +40,113 @@ def get_latest_prices(stock,data):
 
         return (timestamp,price_to_sell,price_to_buy,price_current_value)
 
+class AcceptParameters:
+    def __init__(self,stock,exchange,df_data,config_params):
+        self.stock=stock
+        self.exchange=exchange
+        self.df_data=df_data
+        self.config_params=config_params
+
+        self.EMA_surface_plus=0
+        self.EMA_surface_min=0
+        self.bigEMA_derivative=0
+        self.surface_indicator=0
+        self.number_of_EMA_crossings=0
+
+        self.df_data['timestamps']=self.df_data['timestamps'].map(lambda timestamp : timestamp.replace(tzinfo=pytz.timezone("Etc/GMT-4")))
+
+    def get_EMA_areas(self,ndays=2,logger=None):
+        FUNCTION='get_EMA_areas'
+        '''
+        Calculate the area of the difference between small and 
+        big EMA lines, for the last ndays days.
+        '''
+        start=utils.get_start_business_date(self.exchange,ndays+1,logger)
+
+        if logger:
+            logger.debug("Getting EMA areas starting from {}".format(start.strftime("%Y/%m/%d-%H:%M:%S")),extra={'function':FUNCTION})
+
+        df_f = self.df_data[self.df_data['timestamps']>=start]
+
+        smallEMAs=df_f.smallEMA
+        bigEMAs=df_f.bigEMA
+
+        return utils.calculate_surfaces_EMAs(smallEMAs,bigEMAs,logger)
+
+    def get_number_EMA_crossings(self,ndays=2,logger=None):
+        FUNCTION='get_number_EMA_crossings'
+        '''
+        Calculate the number of times the bigEMA line crosses the smallEMA line.
+        '''
+        start=utils.get_start_business_date(self.exchange,ndays+1,logger)
+
+        if logger:
+            logger.debug("Getting number of EMA crossings starting from {}".format(start.strftime("%Y/%m/%d-%H:%M:%S")),extra={'function':FUNCTION})
+
+        df_f = self.df_data[self.df_data['timestamps']>=start]
+
+        smallEMAs=df_f.smallEMA
+        bigEMAs=df_f.bigEMA
+
+        return utils.get_number_of_crossings(smallEMAs,bigEMAs,logger)
+
+    def accept_stock(self,logger):
+        FUNCTION='accept_stock'
+        '''
+        Check whether we should monitor de stock or not.
+        '''
+        logger.debug("Checking whether we want to accept stock {} or not".format(self.stock),extra={'function':FUNCTION})
+        result=True
+        bigEMAs=self.df_data.bigEMA
+
+        if len(bigEMAs)<self.config_params['trade_logic']['number_of_big_EMAs_threshold']:
+            result=False
+            logger.debug("Ticker: {}. There weren't enough bigEMA measurements ({} vs required {}) to make a decision".format(self.stock,len(bigEMAs),self.config_params['trade_logic']['number_of_big_EMAs_threshold']),extra={'function':FUNCTION})
+
+        D,A=utils.get_deriv_surf(bigEMAs,logger)
+        self.bigEMA_derivative=D
+        self.surface_indicator=A
+
+        if abs(D)>self.config_params['trade_logic']['big_EMA_derivative_threshold']:
+            result=False
+            logger.debug("Ticker: {}. Derivative is too steep ({} vs required {})".format(self.stock,abs(D),self.config_params['trade_logic']['big_EMA_derivative_threshold']),extra={'function':FUNCTION})
+
+        if A>self.config_params['trade_logic']['surface_indicator_threshold']:
+            result=False
+            logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(self.stock,A,self.config_params['trade_logic']['surface_indicator_threshold']),extra={'function':FUNCTION})
+
+        areas = self.get_EMA_areas(logger=logger)
+        if not areas:
+            logger.debug("Ticker: {}. Impossible to calculate EMA areas.".format(self.stock),extra={'function':FUNCTION})
+            return False
+
+        self.EMA_surface_plus=round(areas[0],3)
+        self.EMA_surface_min=round(areas[1],3)
+
+        if self.config_params['trade_logic']['EMA_surface_plus_threshold']<self.EMA_surface_plus:
+            logger.debug("Ticker: {}. EMA surface plus ({}) if higher than the threshold ({})".format(self.stock,self.EMA_surface_plus,self.config_params['trade_logic']['EMA_surface_plus_threshold']),extra={'function':FUNCTION})
+            result=False
+
+        if self.config_params['trade_logic']['EMA_surface_min_threshold']>self.EMA_surface_min:
+            logger.debug("Ticker: {}. EMA surface min ({}) if lower than the threshold ({})".format(self.stock,self.EMA_surface_min,self.config_params['trade_logic']['EMA_surface_min_threshold']),extra={'function':FUNCTION})
+            result=False
+
+        number_of_crossings = self.get_number_EMA_crossings(logger=logger)
+
+        if number_of_crossings==None:
+            logger.debug("Ticker: {}. Impossible to calculate number of EMA crossings.".format(self.stock),extra={'function':FUNCTION})
+            return False
+
+        self.number_of_EMA_crossings=number_of_crossings
+
+        if self.number_of_EMA_crossings<self.config_params['trade_logic']['number_of_EMA_crossings']:
+            logger.debug("Ticker: {}. Number of EMA crossings ({}) is smaller than threshold ({})".format(self.stock,self.number_of_EMA_crossings,self.config_params['trade_logic']['number_of_EMA_crossings']),extra={'function':FUNCTION})
+            result=False
+
+        return result
+
+
+
 class Stocks:
     def __init__(self,
                 balance=[0,0],
@@ -89,9 +196,15 @@ class Stocks:
             [
                 {
                     'ticker': ...,
+                    'fullname' : ...,
                     'timestamp_bought' : ...,
                     'timestamp_sold' : ...,
-                    'net_profit_loss' : ...
+                    'net_profit_loss' : ...,
+                    'derivative_factor' : ...,
+                    'surface_factor' : ...,
+                    'EMA_surface_plus' : ...,
+                    'EMA_surface_min' : ...,
+                    'number_of_EMA_crossings' : ...
                 },
                 ...
             ]
@@ -114,6 +227,18 @@ class Stocks:
         self.interesting_stocks=interesting_stocks
         self.not_interesting_stocks=not_interesting_stocks
         self.yahoo_calls=yahoo_calls
+
+        self.initial_virtual_result=0
+        self.initial_final_result=0
+
+        for key in self.current_status:
+            if self.current_status[key]['virtual_result']!="-":
+                self.initial_virtual_result+=float(self.current_status[key]['virtual_result'])
+        
+        for transaction in self.archive:
+            self.initial_final_result+=float(transaction['net_profit_loss'])
+
+
 
     def update_yahoo_calls(self,add_call,logger):
         FUNCTION='add_yahoo_call'
@@ -141,15 +266,12 @@ class Stocks:
         else:
             logger.error("Day present in object is after current day. Bad bad programmer, this should never occur.",extra={'function':FUNCTION})
             
-
-        if now.hour>data['last_hour']:
+        if now.hour>data['last_hour'] or now.hour<data['last_hour']:
             data['last_hour']=now.hour
             data['hourly_calls']=1
         elif now.hour==data['last_hour']:
             if add_call:
                 data['hourly_calls']+=1
-        else:
-            logger.error("Hour present in object is after current hour. Bad bad programmer, this should never occur.",extra={'function':FUNCTION})
 
     def get_latest_data(self,ticker,exchange,config_params,logger):
         #FUNCTION='get_latest_data'
@@ -161,7 +283,7 @@ class Stocks:
         start_day=utils.get_start_business_date(exchange,config_params['trade_logic']['yahoo_period_historic_data'],logger)
         if not start_day:
             return pd.DataFrame
-            
+
         days_in_past=(datetime.now(pytz.timezone('UTC'))-start_day).days+1
 
         start=datetime.strftime(datetime.now()-timedelta(days=days_in_past),'%Y/%m/%d-%H:%M:%S')
@@ -217,9 +339,11 @@ class Stocks:
             self.not_interesting_stocks.append(stock)
             return False,0,0
 
+        
+
         return True,D,A
 
-    def add_new_stock(self,stock,df_data,exchange,D,A,fullname,description,market_state,logger):
+    def add_new_stock(self,stock,df_data,exchange,params,fullname,description,market_state,logger):
         FUNCTION='add_new_stock'
         '''
         Add new stock
@@ -266,8 +390,12 @@ class Stocks:
                                         "timestamp_data":"-",
                                         "description":description,
                                         "exchange":exchange,
-                                        "derivative_factor":round(D,8),
-                                        "surface_factor":round(A,8)}
+                                        "derivative_factor":round(params.bigEMA_derivative,8),
+                                        "surface_factor":round(params.surface_indicator,8),
+                                        "EMA_surface_plus":round(params.EMA_surface_plus,8),
+                                        "EMA_surface_min":round(params.EMA_surface_min,8),
+                                        "number_of_EMA_crossings":params.number_of_EMA_crossings
+                                        }
 
         logger.info("Stock {} was added to the list of stocks to be monitored".format(stock),extra={'function':FUNCTION})
 
@@ -294,11 +422,12 @@ class Stocks:
                 logger.debug("No data was received from the yahooAPI",extra={'function':FUNCTION})
                 continue
 
-            accept=self.accept_new_stock(ticker,df_data,config_params,logger)
-            if not accept[0]:
+            params=AcceptParameters(ticker,exchange,df_data,config_params)
+
+            if not params.accept_stock(logger):
+                self.not_interesting_stocks.append(ticker)
+                logger.debug("Ticker {} was skipped because it didn't pass the tests.".format(ticker),extra={'function':FUNCTION})
                 continue
-            D=accept[1]
-            A=accept[2]
 
             fullname=scraper.get_fullname(ticker,logger)
             if not fullname:
@@ -318,7 +447,7 @@ class Stocks:
                 logger.debug("Ticker {} was skipped because no valid response was received from the check_market_state function.".format(ticker),extra={'function':FUNCTION})
                 continue
 
-            self.add_new_stock(ticker,df_data,exchange,D,A,fullname,description,market_state,logger)
+            self.add_new_stock(ticker,df_data,exchange,params,fullname,description,market_state,logger)
 
     def initialize_stocks(self,logger,config_params,update_nasdaq_file=False):
         FUNCTION='initialize_stocks'
@@ -402,7 +531,12 @@ class Stocks:
             'fullname':scraper.get_fullname(stock,logger),
             'timestamp_bought':self.current_status[stock]["timestamp_bought"],
             'timestamp_sold':utils.date_now_flutter(),
-            'net_profit_loss':current_value-value_bought
+            'net_profit_loss':current_value-value_bought,
+            'derivative_factor':self.current_status[stock]['derivative_factor'],
+            'surface_factor':self.current_status[stock]['surface_factor'],
+            'EMA_surface_plus':self.current_status[stock]['EMA_surface_plus'],
+            'EMA_surface_min':self.current_status[stock]['EMA_surface_min'],
+            'number_of_EMA_crossings':self.current_status[stock]['number_of_EMA_crossings'],
         }
 
         self.bought_stocks.pop(stock)
@@ -511,6 +645,7 @@ class Stocks:
 
         to_remove=[]
         for ticker in tickers:
+            logger.debug("Trying to sell {} stocks".format(ticker),extra={'function':FUNCTION})
             if not ticker in self.current_status or self.current_status[ticker]["bought"]=="NO":
                 logger.debug("Trying to sell stocks from {}, but no stocks from this company are owned ATM.".format(ticker),extra={'function':FUNCTION})
                 to_remove.append(ticker)
@@ -604,8 +739,7 @@ class Stocks:
         for ticker in data:
             df=pd.DataFrame(data[ticker])
 
-            delta=df['timestamps'].iloc[1]-df['timestamps'].iloc[0]
-            timestamps=df.timestamps
+            timestamps=pd.to_datetime(df.timestamps)
             delta=timedelta(minutes=1)
             for i in range(len(timestamps)-1):
                 if timestamps.iloc[i].date()==timestamps.iloc[i+1].date():
@@ -687,6 +821,8 @@ class Stocks:
 
         result={
             'starting_balance':self.balance[0],
+            'initial_virtual_result':self.initial_virtual_result,
+            'initial_final_result':self.initial_final_result,
             'balance':self.balance[1],
             'total_value_current':total_value_current,
             'algorithm_running':algo_running,

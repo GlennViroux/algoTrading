@@ -42,6 +42,15 @@ class Retrieve(Resource):
         filename=os.path.basename(datapath)
         return send_from_directory(dirname,filename,attachment_filename=filename)
 
+class RetrievePastSessions(Resource):
+    def get(self,date,data_id):
+        datapath=utils.get_past_session_file(data_id.upper(),date)
+        if datapath==None:
+            abort(404,message="Past session for {} and date {} does not exist.".format(data_id,date))
+        dirname=os.path.dirname(datapath)
+        filename=os.path.basename(datapath)
+        return send_from_directory(dirname,filename,attachment_filename=filename)
+
 class GetInfo(Resource):
     def get(self,info_id):
         if info_id.upper()=="ALGOSTATUS":
@@ -52,6 +61,11 @@ class GetInfo(Resource):
                     isrunning="Yes"
                     duration=str(time.time()-start_time)
             return make_response(jsonify(isrunning=isrunning,duration=duration),200)
+
+        elif info_id.upper()=="PASTSESSIONS":
+            past_sessions=utils.get_dates_past_sessions()
+            return make_response(jsonify(past_sessions),200)
+
 
         abort(404,message="This operation is not allowed.")
 
@@ -155,6 +169,10 @@ class Commands(Resource):
             if not algo_running:
                 abort(404,message="Algorithm isn't running at this moment.")
 
+        if "CLEAN_PREVIOUS_SESSIONS" in commands:
+            utils.clean_previous_sessions("./past_sessions/")
+            commands.remove("CLEAN_PREVIOUS_SESSIONS")
+
         tickers_to_sell=[ticker for ticker in tickers_to_sell if ticker]
         tickers_to_buy=[ticker for ticker in tickers_to_buy if ticker]
         commands=[command for command in commands if command]
@@ -169,6 +187,7 @@ api=Api(application)
 api.add_resource(Commands,"/commands/")
 api.add_resource(Plot,"/plots/<string:ticker>")
 api.add_resource(Retrieve,"/retrieve/<string:data_id>")
+api.add_resource(RetrievePastSessions,"/retrievepastsessions/<string:date>/<string:data_id>")
 api.add_resource(GetInfo,"/info/<string:info_id>")
 api.add_resource(ConfigCommands,"/config/")
 
