@@ -106,6 +106,7 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
 
     # Set initial values
     stock_market_open=True
+    archive_session=False
     counter=0
 
     while stock_market_open:
@@ -142,14 +143,17 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
             counter+=1
             if counter>=fixed_rounds:
                 logger.info("Terminating algorithm because of configured fixed rounds",extra={'function':FUNCTION})
+                archive_session=True
                 break
         else:
             scraper=YahooScraper()
             if (scraper.all_markets_closed(stocks.monitored_stocks,config_params,logger) and not config_params['main']['ignore_market_hours']) or ("STOPALGORITHM" in commands['commands']):
                 logger.info("Terminating algorithm because all relevant markets are closed or it was instructed by the user",extra={'function':FUNCTION})
                 if "STOPALGORITHM" in commands['commands']:
+                    archive_session=True
                     commands['commands'].remove("STOPALGORITHM")
                 if config_params['main']['sell_all_before_finish']:
+                    archive_session=True
                     stocks.hard_sell_check({"tickers_to_sell":["ALLSTOCKS"]},commands_log,config_params,logger)
                 utils.write_json(commands,commands_log,logger=logger)
                 break
@@ -165,10 +169,11 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
     # Perform final operations before terminating
     stocks.current_status=utils.close_markets(stocks.current_status)
     update_state(stocks,logger)
-    transactions_file=utils.get_latest_log("ARCHIVE",logger=logger)
-    status_file=utils.get_latest_log("STATUS",logger=logger)
-    overview_file=utils.get_latest_log("OVERVIEW",logger=logger)
-    utils.archive_session([transactions_file,status_file,overview_file],logger=logger)
+    if archive_session:
+        transactions_file=utils.get_latest_log("ARCHIVE",logger=logger)
+        status_file=utils.get_latest_log("STATUS",logger=logger)
+        overview_file=utils.get_latest_log("OVERVIEW",logger=logger)
+        utils.archive_session([transactions_file,status_file,overview_file],logger=logger)
 
     return True
 
