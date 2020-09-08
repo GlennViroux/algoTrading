@@ -119,13 +119,13 @@ class Commands(Resource):
         tickers_to_buy=[]
         commands=[]
         if existing_data:
-            if len(existing_data['tickers_to_sell'])>0:
+            if 'tickers_to_sell' in existing_data and len(existing_data['tickers_to_sell'])>0:
                 tickers_to_sell=existing_data['tickers_to_sell']
 
-            if len(existing_data['tickers_to_buy'])>0:
+            if 'tickers_to_buy' in existing_data and len(existing_data['tickers_to_buy'])>0:
                 tickers_to_sell=existing_data['tickers_to_buy']
 
-            if len(existing_data['commands'])>0:
+            if 'commands' in existing_data and len(existing_data['commands'])>0:
                 commands=existing_data['commands']
 
         args=commands_parser.parse_args()

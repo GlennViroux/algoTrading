@@ -273,7 +273,8 @@ def read_config(config_file,logger=None):
     result['main']['include_pre_trading']=(json_data['main']['include_pre_trading']=="true")
     result['main']['include_post_trading']=(json_data['main']['include_post_trading']=="true")
     result['main']['sell_all_before_finish']=(json_data['main']['sell_all_before_finish']=="true")
-
+    result['main']['initial_number_of_stocks']=int(json_data['main']['initial_number_of_stocks'])
+    result['main']['check_for_new_stocks']=(json_data['main']['check_for_new_stocks']=="true")
 
     result['trade_logic']['money_to_spend']=float(json_data['trade_logic']['money_to_spend'])
     result['trade_logic']['yahoo_latency_threshold']=float(json_data['trade_logic']['yahoo_latency_threshold'])
@@ -281,7 +282,6 @@ def read_config(config_file,logger=None):
     result['trade_logic']['yahoo_period_small_EMA']=int(json_data['trade_logic']['yahoo_period_small_EMA'])
     result['trade_logic']['yahoo_period_big_EMA']=int(json_data['trade_logic']['yahoo_period_big_EMA'])
     result['trade_logic']['yahoo_period_historic_data']=int(json_data['trade_logic']['yahoo_period_historic_data'])
-    result['trade_logic']['number_of_stocks_to_monitor']=int(json_data['trade_logic']['number_of_stocks_to_monitor'])
     result['trade_logic']['number_of_big_EMAs_threshold']=int(json_data['trade_logic']['number_of_big_EMAs_threshold'])
     result['trade_logic']['big_EMA_derivative_threshold']=float(json_data['trade_logic']['big_EMA_derivative_threshold'])
     result['trade_logic']['surface_indicator_threshold']=float(json_data['trade_logic']['surface_indicator_threshold'])
@@ -586,4 +586,12 @@ def configure_logger(name,output_log,config_params):
     })
     return logging.getLogger(name)
 
-  
+def before_close(period=20):
+    '''
+    Returns true if now is period minutes or closer to the closing of the market.
+    '''
+    now=datetime.now()
+
+    close=datetime(year=now.year,month=now.month,day=now.day,hour=22,minute=0,second=0,microsecond=0)
+
+    return now>=close-timedelta(minutes=period)

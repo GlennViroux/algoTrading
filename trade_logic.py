@@ -33,7 +33,7 @@ def get_latest_prices(stock,data):
         '''
         returns tuple: (timestamp_data,price_to_sell,price_to_buy,price_current_value)
         '''
-        timestamp=datetime.strftime(data['timestamps'][-1],"%Y/%m-%d %H:%M:%S")
+        timestamp=datetime.strftime(data['timestamps'][-1],"%Y-%m-%d %H:%M:%S")
         price_to_buy=round(data['high'][-1],2)
         price_to_sell=round(data['low'][-1],2)
         price_current_value=round((data['open'][-1]+data['close'][-1])/2,2)
@@ -404,7 +404,7 @@ class Stocks:
         '''
         Check if we should add a new stock to monitor
         '''
-        while len(self.monitored_stocks)<config_params['trade_logic']['number_of_stocks_to_monitor']:
+        while len(self.monitored_stocks)<config_params['main']['initial_number_of_stocks']:
             ticker=self.get_new_interesting_stock(logger)
             
             logger.debug("Checking {}".format(ticker),extra={'function':FUNCTION})
@@ -510,7 +510,7 @@ class Stocks:
         latency=latest_timestamp-datetime.now()
         if latency>timedelta(seconds=threshold):
             # latest data from yahoo is not valid anymore
-            logger.debug("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,threshold),extra={'function':FUNCTION})
+            logger.info("Stock {} was not bought because only outdated information from the yahooAPI was received. Latency of {}s is considered with a threshold of {}s".format(stock,latency.seconds,threshold),extra={'function':FUNCTION})
             return False
             
         return True
@@ -673,7 +673,7 @@ class Stocks:
                 to_remove.append(ticker)
 
         if remove_all_stocks:
-            commands['tickers']=[]
+            commands['tickers_to_sell']=[]
         else:
             for ticker in to_remove:
                 commands['tickers_to_sell'].remove(ticker)
