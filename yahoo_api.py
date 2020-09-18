@@ -22,7 +22,8 @@ class YahooAPI:
         '''
         url=self.base_url+"/v8/finance/chart/{}".format(ticker)
 
-        logger.debug("Ticker: {}. Getting data from {} until {}".format(ticker,start,end),extra={'function':FUNCTION})
+        if logger:
+            logger.debug("Ticker: {}. Getting data from {} until {}".format(ticker,start,end),extra={'function':FUNCTION})
 
         start_datetime=datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
         end_datetime=datetime.strptime(end,'%Y/%m/%d-%H:%M:%S')
@@ -32,12 +33,15 @@ class YahooAPI:
         start_unix=int((start_datetime-first_unix).total_seconds())-2*3600
         end_unix=int((end_datetime-first_unix).total_seconds())-2*3600
 
-        logger.debug("Ticker: {}. Start unix: {}, end unix: {}".format(ticker,start_unix,end_unix),extra={'function':FUNCTION})
+        if logger:
+            logger.debug("Ticker: {}. Start unix: {}, end unix: {}".format(ticker,start_unix,end_unix),extra={'function':FUNCTION})
 
+        #print(url+"?"+"symbol="+ticker+"&"+"period1="+str(start_unix)+"&"+"period2="+str(end_unix)+"&"+"interval="+interval+"&"+"includePrePost="+"true")
         req=requests.get(url,params={'symbol':ticker,'period1':start_unix,'period2':end_unix,'interval':interval,'includePrePost':'true'})
 
         if req.status_code!=200:
-            logger.debug("Ticker: {}. No valid response was received from the yahoo query ({}).".format(ticker,url),extra={'function':FUNCTION})
+            if logger:
+                logger.debug("Ticker: {}. No valid response was received from the yahoo query ({}).".format(ticker,url),extra={'function':FUNCTION})
             return pd.DataFrame
 
         json_data=json.loads(req.text)
@@ -47,7 +51,8 @@ class YahooAPI:
         try:
             timestamps = [first_unix+timedelta(seconds=int(t)+gmtoffset) for t in json_data['chart']['result'][0]['timestamp']]
         except KeyError:
-            logger.debug("Ticker: {}. No valid data (KeyError when getting timestamps) was obtained from the yahooAPI".format(ticker),extra={'function':FUNCTION})
+            if logger:
+                logger.debug("Ticker: {}. No valid data (KeyError when getting timestamps) was obtained from the yahooAPI".format(ticker),extra={'function':FUNCTION})
             return pd.DataFrame
 
         df_dict={'timestamps':timestamps,
@@ -123,18 +128,21 @@ class YahooAPI:
 
         df_smallEMA=self.calculate_EMAs(ticker,start,end,interval,period_small_EMA,smallEMA=True,df_historic_data=df_data,logger=logger)
         if df_smallEMA.empty:
-            logger.debug("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_small_EMA),extra={'function':FUNCTION})
+            if logger:
+                logger.debug("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_small_EMA),extra={'function':FUNCTION})
             return pd.DataFrame
         df_smallEMA=df_smallEMA.set_index('timestamps')
 
         df_bigEMA=self.calculate_EMAs(ticker,start,end,interval,period_big_EMA,smallEMA=False,df_historic_data=df_data,logger=logger)
         if df_bigEMA.empty:
-            logger.debug("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_big_EMA),extra={'function':FUNCTION})
+            if logger:
+                logger.debug("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_big_EMA),extra={'function':FUNCTION})
             return pd.DataFrame
         df_bigEMA=df_bigEMA.set_index('timestamps')
 
         df=pd.concat([df_base,df_smallEMA,df_bigEMA],axis=1,join='outer').reset_index()
         df.drop('index',axis=1,inplace=True,errors='ignore')
+        df.sort_values("timestamps",inplace=True)
 
         return df
 

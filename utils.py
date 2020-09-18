@@ -184,12 +184,13 @@ def write_state(stocks,path,logger):
     result["interesting_stocks"]=stocks.interesting_stocks
     result["not_interesting_stocks"]=stocks.not_interesting_stocks
     result["yahoo_calls"]=stocks.yahoo_calls
+    result["results"]=stocks.results
 
     try:
         with safe_open(path,"w") as f:
             f.write(json.dumps(result,indent=2))
     except:
-        logger.debug("Unable to write config. Exception occured.",extra={'function':FUNCTION},exc_info=True)
+        logger.debug("Unable to write state. Exception occured.",extra={'function':FUNCTION},exc_info=True)
 
 def write_log_json(algolog_path,output_path,logger=None):
     FUNCTION='write_log_json'
@@ -288,6 +289,12 @@ def read_config(config_file,logger=None):
     result['trade_logic']['EMA_surface_plus_threshold']=float(json_data['trade_logic']['EMA_surface_plus_threshold'])
     result['trade_logic']['EMA_surface_min_threshold']=float(json_data['trade_logic']['EMA_surface_min_threshold'])
     result['trade_logic']['number_of_EMA_crossings']=int(json_data['trade_logic']['number_of_EMA_crossings'])
+    result['trade_logic']['drop_period']=int(json_data['trade_logic']['drop_period'])
+    result['trade_logic']['drop_threshold']=int(json_data['trade_logic']['drop_threshold'])
+    result['trade_logic']['support_days']=int(json_data['trade_logic']['support_days'])
+    result['trade_logic']['support_percentage']=int(json_data['trade_logic']['support_percentage'])
+    
+
 
     result['logging']['level_console']=json_data['logging']['level_console']
     result['logging']['level_file']=json_data['logging']['level_file']
@@ -324,7 +331,7 @@ def initialize_commands_file(file_path,logger=None):
     with safe_open(file_path,"w") as f:
         data={
             'tickers_to_sell':[],
-            'tickers_to_buy':[],
+            'tickers_to_stop_monitor':[],
             'commands':[]
         }
         f.write(json.dumps(data,indent=2))

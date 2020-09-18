@@ -7,5 +7,6 @@
     "current_status": {},
     "interesting_stocks": [],
     "not_interesting_stocks": [],
-    "yahoo_calls": {}
+    "yahoo_calls": {},
+    "results": {}
 }

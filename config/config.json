@@ -2,26 +2,30 @@
   "main": {
     "seconds_to_sleep": "60",
     "plot_data": "false",
-    "ignore_market_hours": "false",
+    "ignore_market_hours": "true",
     "include_pre_trading": "false",
     "include_post_trading": "false",
-    "sell_all_before_finish": "true",
+    "sell_all_before_finish": "false",
     "check_for_new_stocks": "false",
-    "initial_number_of_stocks": "10"
+    "initial_number_of_stocks": "5"
   },
   "trade_logic": {
     "money_to_spend": "500",
-    "yahoo_latency_threshold": "20",
+    "yahoo_latency_threshold": "600",
     "yahoo_interval": "5m",
     "yahoo_period_small_EMA": "50",
-    "yahoo_period_big_EMA": "400",
+    "yahoo_period_big_EMA": "200",
     "yahoo_period_historic_data": "10",
     "number_of_big_EMAs_threshold": "300",
     "big_EMA_derivative_threshold": "0.5",
     "surface_indicator_threshold": "50",
     "EMA_surface_plus_threshold": "100",
     "EMA_surface_min_threshold": "-100",
-    "number_of_EMA_crossings": "0"
+    "number_of_EMA_crossings": "0",
+    "drop_period": "3600",
+    "drop_threshold": "-3",
+    "support_days": "6",
+    "support_percentage": "97"
   },
   "logging": {
     "level_console": "DEBUG",

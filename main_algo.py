@@ -18,7 +18,18 @@ parser.add_argument('--initial_state_file','-i',type=str,help='File in JSON form
 parser.add_argument('--config_file','-c',type=str,help='Configuration file containing algorithm parameters.',default="./config/config.json")
 args=parser.parse_args()
 
-def update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path):
+def update_state(
+    stocks,
+    logger,
+    output_dir_log,
+    output_dir_overview,
+    output_dir_status,
+    output_dir_archive,
+    output_dir_plotdata,
+    output_dir_log_json,
+    ending_state_path,
+    overview_plotdata_path):
+
     FUNCTION='write_last_state'
     '''
     Write the current state to the latest_state json file.
@@ -48,6 +59,10 @@ def update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_sta
     logger.debug("Writing algolog in JSON format...",extra={'function':FUNCTION})
     utils.write_log_json(output_dir_log,output_dir_log_json,logger=logger)
 
+    # Write overview plotdata in JSON format
+    logger.debug("Writing overview plotdata...",extra={'function':FUNCTION})
+    utils.write_json(stocks.results,overview_plotdata_path,logger=logger)
+
     # Write ending state and copy to config folder
     logger.debug("Writing and copying ending state...",extra={'function':FUNCTION})
     utils.write_state(stocks,ending_state_path,logger=logger)
@@ -55,7 +70,8 @@ def update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_sta
 
 
 
-def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
+
+def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None,start_clean=True):
     FUNCTION='main'
     '''
     Main function
@@ -69,6 +85,7 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
     output_dir_plotdata=output_dir+"ALGO_PLOTDATA_LOG_{}.txt".format(utils.date_now_filename())
     output_dir_overview=output_dir+"ALGO_OVERVIEW_LOG_{}.txt".format(utils.date_now_filename())
     ending_state_path=output_dir+"ALGO_ENDING_STATE_{}.txt".format(utils.date_now_filename())
+    overview_plotdata_path=output_dir+"ALGO_OVERVIEWPLOTDATA_LOG_{}.txt".format(utils.date_now_filename())
 
     # Clean output directory
     utils.clean_output(output_dir,output_dir_plots)
@@ -98,14 +115,16 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
                     archive=init_val["archive"],
                     interesting_stocks=init_val["interesting_stocks"],
                     not_interesting_stocks=init_val["not_interesting_stocks"],
-                    yahoo_calls=init_val["yahoo_calls"])
+                    yahoo_calls=init_val["yahoo_calls"],
+                    results=init_val["results"])
 
     # Initialize status files
-    update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path)
+    update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path,overview_plotdata_path)
 
     # Check which stocks to monitor
-    logger.info("Getting and initializing list of stocks to monitor...",extra={'function':FUNCTION})
-    stocks.initialize_stocks(logger=logger,config_params=config_params,update_nasdaq_file=False)
+    if start_clean:
+        logger.info("Getting and initializing list of stocks to monitor...",extra={'function':FUNCTION})
+        stocks.initialize_stocks(logger=logger,config_params=config_params,update_nasdaq_file=False)
 
     # Set initial values
     stock_market_open=True
@@ -121,11 +140,11 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
         # Read and save whether the user has ordered manually to sell a certain stock, and if true, sell it
         logger.info("Checking whether user has ordered to buy or sell stocks...",extra={'function':FUNCTION})
         commands_log=utils.get_latest_log("COMMANDS",logger=logger)
-        commands={'commands':[],'tickers_to_sell':[],'tickers_to_buy':[]}
+        commands={'commands':[],'tickers_to_sell':[],'tickers_to_stop_monitor':[]}
         if commands_log:
             commands=utils.read_commands(commands_log,logger=logger)
             stocks.hard_sell_check(commands,commands_log,config_params,logger)
-            stocks.hard_buy_check(commands,commands_log,config_params,logger)
+            stocks.check_to_stop_monitor_stocks(commands,commands_log,config_params,logger)
 
         # Loop through monitored stocks
         logger.info("Checking monitored stocks...",extra={'function':FUNCTION})
@@ -169,7 +188,7 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
                 break
 
         # Update state
-        update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path)
+        update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path,overview_plotdata_path)
 
         
         # Sleep 
@@ -179,20 +198,20 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None):
 
     # Perform final operations before terminating
     stocks.current_status=utils.close_markets(stocks.current_status)
-    update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path)
+    update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path,overview_plotdata_path)
     if archive_session:
         transactions_file=utils.get_latest_log("ARCHIVE",logger=logger)
         status_file=utils.get_latest_log("STATUS",logger=logger)
         overview_file=utils.get_latest_log("OVERVIEW",logger=logger)
         utils.archive_session([transactions_file,status_file,overview_file],logger=logger)
         stocks.archive=[]
-        update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path)
+        update_state(stocks,logger,output_dir_log,output_dir_overview,output_dir_status,output_dir_archive,output_dir_plotdata,output_dir_log_json,ending_state_path,overview_plotdata_path)
 
 
     return True
 
 
-#start_algorithm(fixed_rounds=1)
+#start_algorithm(fixed_rounds=5)
 
 
 

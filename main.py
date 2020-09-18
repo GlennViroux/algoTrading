@@ -9,11 +9,11 @@ import time
 from main_algo import start_algorithm
 
 OUTPUT_DIR="./output/"
-OUTPUT_DIR_COMMANDS=OUTPUT_DIR+"ALGO_COMMANDS_LOG_{}.txt".format(utils.date_now_filename())
+
 
 commands_parser=reqparse.RequestParser()
 commands_parser.add_argument("tickers_to_sell",type=str,help="Ticker of which you want to sell all currently owned stocks.")
-commands_parser.add_argument("tickers_to_buy",type=str,help="Ticker of which you want to some stocks.")
+commands_parser.add_argument("tickers_to_stop_monitor",type=str,help="Tickers you wish to stop monitoring.")
 commands_parser.add_argument("commands",type=str,help="General commands you want to pass.")
 
 config_parser=reqparse.RequestParser()
@@ -112,18 +112,19 @@ class Commands(Resource):
         global start_time
         commands_log=utils.get_latest_log("COMMANDS")
         if not commands_log:
+            OUTPUT_DIR_COMMANDS=OUTPUT_DIR+"ALGO_COMMANDS_LOG_{}.txt".format(utils.date_now_filename())
             utils.initialize_commands_file(OUTPUT_DIR_COMMANDS)
             commands_log=OUTPUT_DIR_COMMANDS
         existing_data=utils.read_json_data(commands_log)
         tickers_to_sell=[]
-        tickers_to_buy=[]
+        tickers_to_stop_monitor=[]
         commands=[]
         if existing_data:
             if 'tickers_to_sell' in existing_data and len(existing_data['tickers_to_sell'])>0:
                 tickers_to_sell=existing_data['tickers_to_sell']
 
-            if 'tickers_to_buy' in existing_data and len(existing_data['tickers_to_buy'])>0:
-                tickers_to_sell=existing_data['tickers_to_buy']
+            if 'tickers_to_stop_monitor' in existing_data and len(existing_data['tickers_to_stop_monitor'])>0:
+                tickers_to_stop_monitor=existing_data['tickers_to_stop_monitor']
 
             if 'commands' in existing_data and len(existing_data['commands'])>0:
                 commands=existing_data['commands']
@@ -133,8 +134,8 @@ class Commands(Resource):
         args_dict=dict(args)
         if 'tickers_to_sell' in args_dict:
             tickers_to_sell.append(args_dict['tickers_to_sell'])
-        if 'tickers_to_buy' in args_dict:
-            tickers_to_buy.append(args_dict['tickers_to_buy'])
+        if 'tickers_to_stop_monitor' in args_dict:
+            tickers_to_stop_monitor.append(args_dict['tickers_to_stop_monitor'])
         if 'commands' in args_dict:
             commands.append(args_dict['commands'])
 
@@ -156,7 +157,7 @@ class Commands(Resource):
                 if thread.getName()=="main_algo":
                     abort(404,message="Algorithm is already running.")
 
-            algo_thread=threading.Thread(target=start_algorithm,name="main_algo",kwargs={'initial_state_file':'./config/latest_state.json'})
+            algo_thread=threading.Thread(target=start_algorithm,name="main_algo",kwargs={'initial_state_file':'./config/latest_state.json','start_clean':'False'})
             start_time=time.time()
             algo_thread.start()
             commands.remove("STARTALGORITHMFROMLATEST")
@@ -174,11 +175,11 @@ class Commands(Resource):
             commands.remove("CLEAN_PREVIOUS_SESSIONS")
 
         tickers_to_sell=[ticker for ticker in tickers_to_sell if ticker]
-        tickers_to_buy=[ticker for ticker in tickers_to_buy if ticker]
+        tickers_to_stop_monitor=[ticker for ticker in tickers_to_stop_monitor if ticker]
         commands=[command for command in commands if command]
 
-        result={'tickers_to_sell':list(set(tickers_to_sell)),'tickers_to_buy':list(set(tickers_to_buy)),'commands':list(set(commands))}
-        utils.write_json(result,OUTPUT_DIR_COMMANDS)
+        result={'tickers_to_sell':list(set(tickers_to_sell)),'tickers_to_stop_monitor':list(set(tickers_to_stop_monitor)),'commands':list(set(commands))}
+        utils.write_json(result,utils.get_latest_log("COMMANDS"))
         return result,200
 
 
