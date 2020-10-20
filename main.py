@@ -30,14 +30,14 @@ class Plot(Resource):
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
         filename=os.path.basename(plotpath)
-        return send_from_directory("/Users/glennviroux/Documents/VSCode/algoTrading/output/plots/",filename,attachment_filename=filename)
+        return send_from_directory("/Users/glennviroux/Documents/VSCode/algoTrading/output/plots/back_plots/",filename,attachment_filename=filename)
 
 class Retrieve(Resource):
     def get(self,data_id):
-        if data_id=="bactesting":
-            if not os.path.isfile("./backtesting/backtesting_cumulative.csv"):
+        if data_id=="backtesting":
+            if not os.path.isfile("./output/backtesting/backtesting_cumulative.csv"):
                 abort(404,message="No cumulative backtesting CSV exists :(")
-            return send_from_directory("./backtesting/","backtesting_cumulative.csv",attachment_filename="backtesting_cumulative.csv")
+            return send_from_directory("./output/backtesting/","backtesting_cumulative.csv",attachment_filename="backtesting_cumulative.csv")
 
         datapath=utils.get_latest_log(data_id.upper())
         if datapath==None:
