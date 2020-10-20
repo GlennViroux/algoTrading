@@ -124,10 +124,13 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None,s
     # Check which stocks to monitor
     if start_clean:
         logger.info("Getting and initializing list of stocks to monitor...",extra={'function':FUNCTION})
-        stocks.initialize_stocks(logger=logger,config_params=config_params,update_nasdaq_file=False)
+        stocks.initialize_stocks(date=datetime.now(),
+                                logger=logger,
+                                config_params=config_params,
+                                update_nasdaq_file=False)
 
     # Set initial values
-    stock_market_open=True
+    stock_market_open=True  
     archive_session=False
     counter=0
 
@@ -154,7 +157,7 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None,s
         # Check if we should monitor more stocks
         if config_params['main']['check_for_new_stocks']:
             logger.info("Checking if we should monitor more stocks...",extra={'function':FUNCTION})
-            stocks.check_to_monitor_new_stocks(config_params,logger)
+            stocks.check_to_monitor_new_stocks(datetime.now(),config_params,logger)
 
         # Plot data per monitored stock
         if config_params['main']['plot_data']:

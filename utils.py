@@ -255,7 +255,7 @@ def get_latest_log(keyword,basepath="./output/",logger=None):
     return max(list_of_files, key=os.path.getctime)
 
 def get_plot(ticker):
-    list_of_files=glob.glob('./output/plots/*{}.png'.format(ticker.upper()))
+    list_of_files=glob.glob('./output/plots/back_plots/*{}.png'.format(ticker.upper()))
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)
@@ -482,66 +482,7 @@ def get_deriv_surf(input,logger):
 
     return D,A_result
 
-def calculate_surfaces_EMAs(smallEMAs,bigEMAs,logger):
-    FUNCTION='calculate_surfaces_EMAs'
-    '''
-    Mathematical operations in order to characterize a stock.
-    Aplus : bigEMA higher than smallEMA
-    Amin : bigEMA smaller than smallEMA
-    '''
-    bigEMA_list=list(bigEMAs.dropna())
-    smallEMA_list=list(smallEMAs.dropna())
-
-    if not len(bigEMA_list)==len(smallEMA_list):
-        if logger:
-            logger.debug("Length of available big EMAs ({}) is not equal to length of small EMAs ({})".format(len(bigEMA_list),len(smallEMA_list)),extra={'function':FUNCTION})
-        return None
-
-    Aplus=0
-    Amin=0
-    for i in range(len(bigEMA_list)):
-        diff=bigEMA_list[i]-smallEMA_list[i]
-        if diff>=0:
-            Aplus+=diff
-        else:
-            Amin+=diff
-    
-    return Aplus,Amin
-
-def get_number_of_crossings(smallEMAs,bigEMAs,logger):
-    FUNCTION='get_number_of_crossings'
-    '''
-    Mathematical operations in order to characterize a stock.
-    Aplus : bigEMA higher than smallEMA
-    Amin : bigEMA smaller than smallEMA
-    '''
-    bigEMA_list=list(bigEMAs.dropna())
-    smallEMA_list=list(smallEMAs.dropna())
-
-    if not len(bigEMA_list)==len(smallEMA_list):
-        if logger:
-            logger.debug("Length of available big EMAs ({}) is not equal to length of small EMAs ({})".format(len(bigEMA_list),len(smallEMA_list)),extra={'function':FUNCTION})
-        return None
-
-    result=0
-    # 1 when bigEMA>=smallEMA
-    # 0 when bigEMA<smallEMA
-    cond=(bigEMA_list[0]>=smallEMA_list[0])
-    i=1
-    while i<len(bigEMA_list):
-        new_cond=(bigEMA_list[i]>=smallEMA_list[i])
-        if not new_cond==cond:
-            cond=new_cond
-            result+=1
-            i+=10
-        else:
-            i+=1
-
-    logger.debug("Number of EMA crossings: {}".format(result),extra={'function':FUNCTION})
-
-    return result
-
-def get_start_business_date(exchange,input_days_in_past,logger=None):
+def get_start_business_date(exchange,date,input_days_in_past,logger=None):
     FUNCTION='get_start_business_date'
     '''
     Get start business date
@@ -553,8 +494,8 @@ def get_start_business_date(exchange,input_days_in_past,logger=None):
             logger.error("Exchange {} is not recognized by pandas market calendar.".format(exchange),extra={'function':FUNCTION})
         return None
 
-    start=datetime.strftime(datetime.now()-timedelta(days=100),"%Y-%m-%d")
-    end=datetime.strftime(datetime.now(),"%Y-%m-%d")
+    start=datetime.strftime(date-timedelta(days=100),"%Y-%m-%d")
+    end=datetime.strftime(date,"%Y-%m-%d")
 
     series=cal.valid_days(start_date=start, end_date=end)
 

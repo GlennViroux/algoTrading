@@ -10,7 +10,6 @@ from main_algo import start_algorithm
 
 OUTPUT_DIR="./output/"
 
-
 commands_parser=reqparse.RequestParser()
 commands_parser.add_argument("tickers_to_sell",type=str,help="Ticker of which you want to sell all currently owned stocks.")
 commands_parser.add_argument("tickers_to_stop_monitor",type=str,help="Tickers you wish to stop monitoring.")
@@ -35,6 +34,11 @@ class Plot(Resource):
 
 class Retrieve(Resource):
     def get(self,data_id):
+        if data_id=="bactesting":
+            if not os.path.isfile("./backtesting/backtesting_cumulative.csv"):
+                abort(404,message="No cumulative backtesting CSV exists :(")
+            return send_from_directory("./backtesting/","backtesting_cumulative.csv",attachment_filename="backtesting_cumulative.csv")
+
         datapath=utils.get_latest_log(data_id.upper())
         if datapath==None:
             abort(404,message="Datapath for {} does not exist.".format(data_id))
@@ -194,4 +198,4 @@ api.add_resource(ConfigCommands,"/config/")
 
 if __name__ == "__main__":
     #application.run()
-    application.run(debug=True,host='192.168.0.21',port=5050)
+    application.run(debug=True,host='192.168.0.14',port=5050)

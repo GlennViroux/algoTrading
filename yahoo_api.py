@@ -9,7 +9,7 @@ import json
 
 class YahooAPI:
     def __init__(self):
-        self.base_url = "https://query1.finance.yahoo.com/"
+        self.base_url = "https://query1.finance.yahoo.com"
 
     def get_historic_data(self,ticker,start,end,interval,logger=None):
         FUNCTION='get_historic_data'
@@ -25,8 +25,14 @@ class YahooAPI:
         if logger:
             logger.debug("Ticker: {}. Getting data from {} until {}".format(ticker,start,end),extra={'function':FUNCTION})
 
-        start_datetime=datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
-        end_datetime=datetime.strptime(end,'%Y/%m/%d-%H:%M:%S')
+        if isinstance(start,str):
+            start_datetime=datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
+        else:
+            start_datetime=start
+        if isinstance(end,str):
+            end_datetime=datetime.strptime(end,'%Y/%m/%d-%H:%M:%S')
+        else:
+            end_datetime=end
 
         first_unix=datetime(1970,1,1)
         
@@ -41,7 +47,8 @@ class YahooAPI:
 
         if req.status_code!=200:
             if logger:
-                logger.debug("Ticker: {}. No valid response was received from the yahoo query ({}).".format(ticker,url),extra={'function':FUNCTION})
+                logger.debug("Ticker: {}. No valid response was received from the yahoo query ({}). Status code: {}".format(ticker,url,req.status_code),extra={'function':FUNCTION})
+            print(req.text)
             return pd.DataFrame
 
         json_data=json.loads(req.text)
@@ -69,7 +76,16 @@ class YahooAPI:
 
         return df
 
-    def calculate_EMAs(self,ticker,start,end,interval,period,smallEMA=True,df_historic_data=pd.DataFrame,logger=None):
+    def calculate_EMAs( self,
+                        ticker,
+                        start,
+                        end,
+                        interval,
+                        period,
+                        smallEMA=True,
+                        df_historic_data=pd.DataFrame,
+                        logger=None):
+
         FUNCTION="calculate_EMAs"
         '''
         returns dataframe:

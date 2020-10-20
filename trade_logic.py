@@ -17,17 +17,6 @@ import matplotlib.dates as mdates
 import shutil
 import urllib.request as request
 from contextlib import closing
-'''
-ERROR_MODE="ERROR                -:-"
-HARDSELL_MODE="HARDSELL             -:-"
-APIKEY="KOB33KN2G0O9X8SX"
-MAX_TIME_DIFF=timedelta(days=6)
-MAX_STOCKS=10
-PREV_STOCKS_CHECKED=15
-ALPHA_INTRADAY_INTERVAL='30min'
-ALPHA_EMA_INTERVAL='30min'
-'''
-
 
 def get_latest_prices(stock, data):
     # FUNCTION='get_latest_values'
@@ -58,33 +47,38 @@ class AcceptParameters:
         self.support_level = "N/A"
         self.drop_period = config_params['trade_logic']['drop_period']
 
-        self.df_data['timestamps'] = self.df_data['timestamps'].map(
-            lambda timestamp: timestamp.replace(tzinfo=pytz.timezone("Etc/GMT-4")))
+        timestamps_aware = self.df_data['timestamps'].map(lambda timestamp: timestamp.replace(tzinfo=pytz.timezone("Etc/GMT+4")))
+        self.df_data = self.df_data.assign(timestamps=timestamps_aware)
 
-    def get_support_level(self):
+    def get_support_level(self,date):
         '''
         Calculates the support level for the stock in question.
         '''
-        timestamps = self.df_data.timestamps
-        data_sampling = timestamps.iloc[1]-timestamps.iloc[0]
-        timedelta_period = timedelta(
-            seconds=86400*self.config_params['trade_logic']['support_days'])
+        timedelta_period = timedelta(seconds=86400*self.config_params['trade_logic']['support_days'])
+        date_aware = date.replace(tzinfo=pytz.timezone("Etc/GMT-2"))
+        df = self.df_data[self.df_data.timestamps<=date_aware]
+        deltas = df.timestamps - df.timestamps.shift(periods=1)
+        data_sampling = deltas.mode().iloc[0]
         data_points = round(timedelta_period/data_sampling)
 
-        df_rel = self.df_data.tail(data_points)
+        df_rel = df.tail(data_points)
 
         min_value = df_rel.close.min()
         perc = self.config_params['trade_logic']['support_percentage']/100
 
-        return min_value*perc
+        result = min_value*perc
+        self.support_level = result
 
-    def accept_support_level(self):
+        return result
+
+    def accept_support_level(self,date):
         '''
         This function checks whether we should sell a stock because it drops below
         it's support level.
         '''
-        support_level = self.get_support_level()
-        latest_price = self.df_data.close.iloc[-1]
+        df = self.df_data[self.df_data.timestamps<=date]
+        support_level = self.get_support_level(date)
+        latest_price = df.close.iloc[-1]
 
         return latest_price > support_level
 
@@ -97,36 +91,44 @@ class AcceptParameters:
 
         return latest_small_EMA > latest_big_EMA
 
-    def get_EMA_areas(self, ndays=2, logger=None):
+    def get_EMA_areas(self, date, ndays=2, logger=None):
         FUNCTION = 'get_EMA_areas'
         '''
         Calculate the area of the difference between small and 
         big EMA lines, for the last ndays days.
         '''
-        start = utils.get_start_business_date(self.exchange, ndays+1, logger)
+        start = utils.get_start_business_date(self.exchange, date, ndays+1, logger)
 
         if logger:
             logger.debug("Getting EMA areas starting from {}".format(
                 start.strftime("%Y/%m/%d-%H:%M:%S")), extra={'function': FUNCTION})
 
         df_f = self.df_data[self.df_data['timestamps'] >= start]
+        if df_f.empty:
+            logger.debug("Unable to get EMA areas, empty dataframe.",extra={'function':FUNCTION})
+            return None
 
-        smallEMAs = df_f.smallEMA
-        bigEMAs = df_f.bigEMA
+        diff = (df_f.bigEMA-df_f.smallEMA).rename("EMAdiffs")
+        df_f = pd.concat([df_f,diff],axis=1)
 
-        return utils.calculate_surfaces_EMAs(smallEMAs, bigEMAs, logger)
+        Aplus = df_f[df_f.EMAdiffs>0].EMAdiffs.sum()
+        Amin = df_f[df_f.EMAdiffs<0].EMAdiffs.sum()
 
-    def get_latest_drop(self, period, logger):
+        return round(Aplus,3),round(Amin,3)
+
+    def get_latest_drop(self, date, logger):
         FUNCTION='get_latest_drop'
         '''
         Gets the latest drop of the price of the stock, in %/h
         '''
-        timestamps = self.df_data.timestamps
-        data_sampling = timestamps.iloc[-1]-timestamps.iloc[-2]
-        timedelta_period = timedelta(seconds=period)
-        data_points = round(timedelta_period/data_sampling)
+        period = self.config_params['trade_logic']['drop_period']
+        date_aware = date.replace(tzinfo=pytz.timezone("Etc/GMT+4"))
+        df = self.df_data[self.df_data.timestamps<=date_aware]
+        deltas = df.timestamps - df.timestamps.shift(periods=1)
+        data_sampling = deltas.mode().iloc[0]
+        data_points = round(timedelta(seconds=period)/data_sampling)
 
-        df_rel = self.df_data.tail(data_points)
+        df_rel = df.tail(data_points)
 
         if df_rel.empty:
             logger.info("Empty DataFrame was obtained with {} latest datapoints (data sampling: {} period: {})".format(data_points,data_sampling,period),extra={'function':FUNCTION})
@@ -136,44 +138,52 @@ class AcceptParameters:
         min_val = df_rel.close.min()
         rel_diff_perc = (min_val-max_val)/(min_val+max_val)*2*100
 
+        #print("Max val: ",max_val)
+        #print("Min val: ",min_val)
+
         time_diff = df_rel.timestamps.loc[df_rel.close.idxmax()] - df_rel.timestamps.loc[df_rel.close.idxmin()]
         time_diff_seconds = abs(time_diff.total_seconds())
         factor = time_diff_seconds/3600
+        #print("Rel diff perc: ",rel_diff_perc)
+        #print("Factor: ",factor)
+        result = rel_diff_perc/factor
+        #print("Result: ",result)
+        self.latest_drop = result
 
-        return rel_diff_perc/factor
+        return result
 
-    def accept_latest_drop(self, logger):
+    def accept_latest_drop(self, date, logger):
         FUNCTION = 'accept_latest_drop'
-        latest_drop = self.get_latest_drop(self.config_params['trade_logic']['drop_period'],logger=logger)
+        latest_drop = self.get_latest_drop(date,logger=logger)
         if not latest_drop:
             logger.debug("Ticker: {}. Latest drop could not be calculated".format(self.stock),extra={'function':FUNCTION})
             return False
         if latest_drop < self.config_params['trade_logic']['drop_threshold']:
-            logger.debug("Ticker: {}. Latest drop ({}%/h) is greater than the configured threshold ({}%/h)".format(
-                self.stock, latest_drop, self.config_params['trade_logic']['drop_threshold']), extra={'function': FUNCTION})
+            logger.debug("Ticker: {}. Latest drop ({}%/h) is greater than the configured threshold ({}%/h)".format(self.stock, latest_drop, self.config_params['trade_logic']['drop_threshold']), extra={'function': FUNCTION})
             return False
 
         return True
 
-    def get_number_EMA_crossings(self, ndays=2, logger=None):
+    def get_number_EMA_crossings(self, date, ndays=4, logger=None):
         FUNCTION = 'get_number_EMA_crossings'
         '''
         Calculate the number of times the bigEMA line crosses the smallEMA line.
         '''
-        start = utils.get_start_business_date(self.exchange, ndays+1, logger)
-
+        start = utils.get_start_business_date(self.exchange, date, ndays+1, logger)
         if logger:
-            logger.debug("Getting number of EMA crossings starting from {}".format(
-                start.strftime("%Y/%m/%d-%H:%M:%S")), extra={'function': FUNCTION})
+            logger.debug("Getting number of EMA crossings starting from {}".format(start.strftime("%Y/%m/%d-%H:%M:%S")), extra={'function': FUNCTION})
 
-        df_f = self.df_data[self.df_data['timestamps'] >= start]
+        date_aware = date.replace(tzinfo=pytz.timezone("Etc/GMT-2"))
+        df = self.df_data[self.df_data.timestamps<=date_aware]
+        diff = df.smallEMA-df.bigEMA
+        df_sign = diff.apply(lambda x : np.sign(x))
+        diff_series = df_sign-df_sign.shift(periods=1)
+        diff_series = diff_series.apply(lambda x : abs(x))
+        #diff_df = pd.concat([df.timestamps,diff_series],axis=1)
 
-        smallEMAs = df_f.smallEMA
-        bigEMAs = df_f.bigEMA
+        return diff_series.sum()/2
 
-        return utils.get_number_of_crossings(smallEMAs, bigEMAs, logger)
-
-    def accept_stock(self, logger):
+    def accept_stock(self, date, logger):
         FUNCTION = 'accept_stock'
         '''
         Check whether we should monitor de stock or not.
@@ -202,14 +212,14 @@ class AcceptParameters:
             logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(
                 self.stock, A, self.config_params['trade_logic']['surface_indicator_threshold']), extra={'function': FUNCTION})
 
-        areas = self.get_EMA_areas(logger=logger)
+        areas = self.get_EMA_areas(date,logger=logger)
         if not areas:
             logger.debug("Ticker: {}. Impossible to calculate EMA areas.".format(
                 self.stock), extra={'function': FUNCTION})
             return False
 
-        self.EMA_surface_plus = round(areas[0], 3)
-        self.EMA_surface_min = round(areas[1], 3)
+        self.EMA_surface_plus = areas[0]
+        self.EMA_surface_min = areas[1]
 
         if self.config_params['trade_logic']['EMA_surface_plus_threshold'] < self.EMA_surface_plus:
             logger.debug("Ticker: {}. EMA surface plus ({}) if higher than the threshold ({})".format(
@@ -217,11 +227,10 @@ class AcceptParameters:
             result = False
 
         if self.config_params['trade_logic']['EMA_surface_min_threshold'] > self.EMA_surface_min:
-            logger.debug("Ticker: {}. EMA surface min ({}) if lower than the threshold ({})".format(
-                self.stock, self.EMA_surface_min, self.config_params['trade_logic']['EMA_surface_min_threshold']), extra={'function': FUNCTION})
+            logger.debug("Ticker: {}. EMA surface min ({}) if lower than the threshold ({})".format(self.stock, self.EMA_surface_min, self.config_params['trade_logic']['EMA_surface_min_threshold']), extra={'function': FUNCTION})
             result = False
 
-        number_of_crossings = self.get_number_EMA_crossings(logger=logger)
+        number_of_crossings = self.get_number_EMA_crossings(date,logger=logger)
 
         if number_of_crossings == None:
             logger.debug("Ticker: {}. Impossible to calculate number of EMA crossings.".format(
@@ -236,22 +245,14 @@ class AcceptParameters:
             result = False
 
         if not self.is_overvalued():
+            result = False
             logger.debug("Ticker {}. Not overvalued, not accepted.".format(
                 self.stock), extra={'function': FUNCTION})
-
-        '''
-        latest_drop = self.get_latest_drop(self.config_params['trade_logic']['drop_period'])
-        self.latest_drop = latest_drop
-
-        if self.latest_drop<self.config_params['trade_logic']['drop_threshold']:
-            logger.debug("Ticker: {}. Latest drop ({}%/h) is greater than the configured threshold ({}%/h)".format(self.stock,self.latest_drop,self.config_params['trade_logic']['drop_threshold']),extra={'function':FUNCTION})
-            result=False
-        '''
 
         return result
 
 
-class Stocks:
+class Stocks(YahooAPI):
     def __init__(self,
                  balance=[0, 0],
                  bought_stocks={},
@@ -391,25 +392,31 @@ class Stocks:
             if add_call:
                 data['hourly_calls'] += 1
 
-    def get_latest_data(self, ticker, exchange, config_params, logger):
+    def get_latest_data(self, 
+                        ticker,
+                        date, 
+                        exchange, 
+                        config_params, 
+                        logger):
         # FUNCTION='get_latest_data'
         '''
         Description
         '''
-        yah = YahooAPI()
+        if isinstance(date,str):
+            date_datetime = datetime.strptime(date,'%Y/%m/%d-%H:%M:%S')
+        else:
+            date_datetime = date
 
-        start_day = utils.get_start_business_date(
-            exchange, config_params['trade_logic']['yahoo_period_historic_data'], logger)
+        start_day = utils.get_start_business_date(exchange, date_datetime, config_params['trade_logic']['yahoo_period_historic_data'], logger)
         if not start_day:
             return pd.DataFrame
 
-        days_in_past = (datetime.now(pytz.timezone('UTC'))-start_day).days+1
+        days_in_past = (date_datetime.replace(tzinfo=pytz.timezone("Etc/GMT-2"))-start_day.replace(tzinfo=pytz.timezone("Etc/GMT-2"))).days+1
 
-        start = datetime.strftime(
-            datetime.now()-timedelta(days=days_in_past), '%Y/%m/%d-%H:%M:%S')
-        end = datetime.strftime(datetime.now(), '%Y/%m/%d-%H:%M:%S')
+        start = date_datetime-timedelta(days=days_in_past)
+        end = date_datetime
 
-        df_data = yah.get_data(ticker, start, end, config_params['trade_logic']['yahoo_interval'], config_params['trade_logic']
+        df_data = self.get_data(ticker, start, end, config_params['trade_logic']['yahoo_interval'], config_params['trade_logic']
                                ['yahoo_period_small_EMA'], config_params['trade_logic']['yahoo_period_big_EMA'], logger=logger)
 
         self.update_yahoo_calls(add_call=True, logger=logger)
@@ -529,12 +536,19 @@ class Stocks:
         logger.info("Stock {} was added to the list of stocks to be monitored".format(
             stock), extra={'function': FUNCTION})
 
-    def check_to_monitor_new_stocks(self, config_params, logger):
+    def check_to_monitor_new_stocks(self,
+                                    date,
+                                    config_params, 
+                                    logger,
+                                    number_of_stocks=None):
         FUNCTION = 'check_to_monitor_new_stocks'
         '''
         Check if we should add a new stock to monitor
         '''
-        while len(self.monitored_stocks) < config_params['main']['initial_number_of_stocks']:
+        if not number_of_stocks:
+            number_of_stocks = config_params['main']['initial_number_of_stocks']
+
+        while len(self.monitored_stocks) < number_of_stocks:
             ticker = self.get_new_interesting_stock(logger)
 
             logger.debug("Checking {}".format(ticker),
@@ -547,8 +561,7 @@ class Stocks:
                     ticker), extra={'function': FUNCTION})
                 continue
 
-            df_data = self.get_latest_data(
-                ticker, exchange, config_params, logger)
+            df_data = self.get_latest_data(ticker, date, exchange, config_params, logger)
 
             if df_data.empty:
                 self.not_interesting_stocks.append(ticker)
@@ -557,8 +570,10 @@ class Stocks:
                 continue
 
             params = AcceptParameters(ticker, exchange, df_data, config_params)
+            params.get_support_level(date)
+            params.get_latest_drop(date,logger)
 
-            if not params.accept_stock(logger):
+            if not params.accept_stock(date,logger):
                 self.not_interesting_stocks.append(ticker)
                 logger.debug("Ticker {} was skipped because it didn't pass the tests.".format(
                     ticker), extra={'function': FUNCTION})
@@ -588,13 +603,21 @@ class Stocks:
             self.add_new_stock(ticker, df_data, exchange, params,
                                fullname, description, market_state, logger)
 
-    def initialize_stocks(self, logger, config_params, update_nasdaq_file=False):
+    def initialize_stocks(self, 
+                        date,
+                        logger, 
+                        config_params, 
+                        number_of_stocks=None, 
+                        update_nasdaq_file=False):
         FUNCTION = 'initialize_stocks'
         '''
         1) find interesting stocks
         2) initialize data for found list in 1)
         '''
         logger.debug("Getting stocks to monitor", extra={'function': FUNCTION})
+
+        if not number_of_stocks:
+            number_of_stocks = config_params['main']['initial_number_of_stocks']
 
         # TODO this is only for NASDAQ!
         file = './nasdaqtraded.txt'
@@ -610,7 +633,11 @@ class Stocks:
 
         self.interesting_stocks = list(set(df.Symbol))
 
-        self.check_to_monitor_new_stocks(config_params, logger)
+        self.check_to_monitor_new_stocks(date, config_params, logger, number_of_stocks)
+
+        for stock in self.monitored_stocks:
+            df = pd.DataFrame.from_dict(self.monitored_stock_data[stock])
+            self.plot_stock(stock,df,"./output/plots/",logger)
 
         logger.debug("Initialized stocks", extra={'function': FUNCTION})
         return True
@@ -619,8 +646,9 @@ class Stocks:
         FUNCTION = 'buy_stock'
 
         # TODO check if market is open
+        P_avg = 20
 
-        number_to_buy = round(money_to_spend/price_to_buy, 2)
+        number_to_buy = min(round(money_to_spend/price_to_buy, 2),round(money_to_spend/P_avg,2))
         money_spent = round(number_to_buy*price_to_buy, 2)
 
         self.bought_stocks[stock] = (number_to_buy, money_spent)
@@ -649,8 +677,6 @@ class Stocks:
         else:
             latest_timestamp = timestamp
 
-        print("GLENNY now: ",datetime.now())
-        print("GLENNY latest: ",latest_timestamp)
         latency = datetime.now()-latest_timestamp
         if latency.total_seconds()-6*3600 > threshold:
             # latest data from yahoo is not valid anymore
@@ -716,7 +742,7 @@ class Stocks:
         self.current_status[stock]["market_state"] = market_state
         exchange = self.current_status[stock]["exchange"]
 
-        df_data = self.get_latest_data(stock, exchange, config_params, logger)
+        df_data = self.get_latest_data(stock, datetime.now(), exchange, config_params, logger)
         if df_data.empty:
             return False
 
@@ -757,12 +783,10 @@ class Stocks:
 
             accept = AcceptParameters(stock, exchange, df_data, config_params)
             self.current_status[stock]["support_level"]=accept.support_level
-            if not accept.accept_support_level():
-                logger.info("Stock {} is sold because it has dropped below it's support level.".format(
-                    stock), extra={'function': FUNCTION})
+            if not accept.accept_support_level(datetime.now()):
+                logger.info("Stock {} is sold because it has dropped below it's support level.".format(stock), extra={'function': FUNCTION})
                 reason = "Support level."
-                self.sell_stock(stock, price_to_sell,
-                                timestamp_data, reason, logger)
+                self.sell_stock(stock, price_to_sell, timestamp_data, reason, logger)
 
         elif (not stock_bought) and (not undervalued):
             # PASS
@@ -783,14 +807,14 @@ class Stocks:
                 return
 
             accept = AcceptParameters(stock, exchange, df_data, config_params)
+            accept_latest_drop = accept.accept_latest_drop(datetime.now(),logger=logger)
             self.current_status[stock]["latest_drop"]=accept.latest_drop
-            if not accept.accept_latest_drop(logger=logger):
+            if not accept_latest_drop:
                 logger.info("Stock {} was not bought because it didn't pass the latest drop check.".format(
                     stock), extra={'function': FUNCTION})
                 return
 
-            self.buy_stock(
-                stock, config_params['trade_logic']['money_to_spend'], price_to_buy, timestamp_data, logger)
+            self.buy_stock(stock, config_params['trade_logic']['money_to_spend'], price_to_buy, timestamp_data, logger)
 
         elif stock_bought and (not undervalued):
             # SELL
@@ -843,8 +867,7 @@ class Stocks:
 
             exchange = self.current_status[ticker]["exchange"]
 
-            df_data = self.get_latest_data(
-                ticker, exchange, config_params, logger)
+            df_data = self.get_latest_data(ticker, datetime.now(), exchange, config_params, logger)
             if df_data.empty:
                 logger.debug("Ticker {}. Unable to obtain latest data, ticker is not sold.".format(
                     ticker), extra={'function': FUNCTION})
@@ -913,73 +936,65 @@ class Stocks:
 
         utils.write_json(commands, command_log, logger=logger)
 
+    def get_gaps(self,df):
+        diff = df.timestamps.diff()
+        result=[]
+        for index in list(diff[diff>timedelta(minutes=500)].index):
+            result.append((df.timestamps.loc[index-1],df.timestamps.loc[index]))
+
+        return result
+
     def plot_monitored_stock_data(self, output_dir_plots, logger):
-        FUNCTION = 'plot_monitored_stock_data'
+        #FUNCTION = 'plot_monitored_stock_data'
         '''
         This function plots the evolution of the prices per stock.
         '''
+        for ticker in self.monitored_stocks:
+            df = pd.DataFrame.from_dict(self.monitored_stock_data[ticker])
+            self.plot_stock(ticker,df,output_dir_plots,logger)
 
-        data = self.monitored_stock_data
-        for ticker in data:
-            df = pd.DataFrame(data[ticker])
+    def plot_stock(self,stock,df,output_dir_plots,logger):
+        FUNCTION="plot_stock"
+        '''
+        Plot price data for one stock
+        '''
+        if df.empty:
+            logger.debug("No valid data for monitored stock {}".format(stock), extra={'function': FUNCTION})
+            return None
+        df = df.sort_values('timestamps')
 
-            timestamps = pd.to_datetime(df.timestamps)
-            delta = timedelta(minutes=1)
-            for i in range(len(timestamps)-1):
-                if timestamps.iloc[i].date() == timestamps.iloc[i+1].date():
-                    delta = timestamps.iloc[i+1]-timestamps.iloc[i]
-                    break
+        gaps = self.get_gaps(df)
+        x = pd.to_datetime(df.timestamps)
+        first = x.iloc[0]
+        last = x.iloc[-1]
 
-            df = df.resample(delta, on='timestamps').last().fillna(np.nan)
-            df = df.drop(columns='timestamps').reset_index()
+        fig,axes = plt.subplots(1,len(gaps)+1,sharey=True,figsize=(20,6),dpi=200)
+        self.plot_subplot(axes[0],df,first,gaps[0][0])
+        for i in range(1,len(gaps)):
+            self.plot_subplot(axes[i],df,left=gaps[i-1][1],right=gaps[i][0])
+        self.plot_subplot(axes[len(gaps)],df,left=gaps[-1][1],right=last)
+        fig.subplots_adjust(wspace=0.0001)
+        fig.suptitle("Stock data for {}".format(stock),fontsize='xx-large')
 
-            if df.empty:
-                logger.debug("No valid data for monitored stock {}".format(
-                    ticker), extra={'function': FUNCTION})
-                continue
+        name=output_dir_plots+"{}_{}.png".format(utils.date_now_filename(), stock)
+        logger.debug("Creating plot {}".format(name),extra={'function':FUNCTION})
+        plt.savefig(name,bbox_inches='tight')
+        plt.close()
+        del fig
 
-            x_dates = pd.to_datetime(df.timestamps)
+    def plot_subplot(self,ax,df,left,right):
+        x = pd.to_datetime(df.timestamps)
+        ax.set_xlim(left=left,right=right)
+        ax.plot(x,df.close,label="Closes")
+        if "smallEMA" in df:
+            ax.plot(x,df.smallEMA,label="smallEMA")
+        if "bigEMA" in df:
+            ax.plot(x,df.bigEMA,label="bigEMA")
+        ax.grid()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d-%H'))
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
+        ax.xaxis.set_major_locator(plt.MaxNLocator(1))
 
-            y_close = df.close
-            y_smallEMA = df.smallEMA
-            y_bigEMA = df.bigEMA
-
-            ax = plt.gca()
-            plt.rcParams.update({'axes.titlesize': 20})
-            plt.rcParams.update({'axes.titleweight': 'roman'})
-            ax.xaxis_date()
-            ax.xaxis.set_major_formatter(
-                mdates.DateFormatter('%Y/%m/%d-%H:%M:%S'))
-
-            plt.xticks(rotation=45)
-            plt.grid(True)
-
-            plt.title("Stock data for {}".format(ticker), pad=18)
-            plt.ylabel("Stock prices [USD]", labelpad=10)
-
-            ax.plot(x_dates, y_close, c='tab:blue', marker=',',
-                    alpha=1, linewidth=1.2, label="Closes")
-            ax.plot(x_dates, y_smallEMA, c='tab:cyan', marker=',',
-                    alpha=1, linewidth=1.2, label="smallEMA")
-            ax.plot(x_dates, y_bigEMA, c='tab:purple', marker=',',
-                    alpha=1, linewidth=1.2, label="bigEMA")
-
-            ax.legend()
-
-            fig = plt.gcf()
-            fig.set_size_inches(15, 8)
-
-            file_list = glob.glob(
-                output_dir_plots+"/*{}*.png".format(ticker.upper()))
-            for f in file_list:
-                os.remove(f)
-
-            plt.tight_layout()
-            plt.savefig(
-                output_dir_plots+"/{}_{}.png".format(utils.date_now_filename(), ticker), dpi=400)
-            plt.clf()
-            plt.cla()
-            plt.close()
 
     def get_overview(self, logger, algo_running="Yes"):
         # FUNCTION='get_overview'

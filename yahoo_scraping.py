@@ -19,12 +19,12 @@ MARKET_IDS={'NasdaqGS':'NASDAQ',
 
 class YahooScraper:
     def __init__(self):
-        self.base_url="https://finance.yahoo.com/"
+        self.base_url="https://finance.yahoo.com"
 
     def get_fullname(self,ticker,logger):
         FUNCTION='get_fullname'
         ticker_upper=ticker.upper()
-        url=self.base_url+"quote/{}".format(ticker_upper)
+        url=self.base_url+"/quote/{}".format(ticker_upper)
         try:
             req=requests.get(url)
         except:
@@ -46,7 +46,7 @@ class YahooScraper:
         '''
         Get the exchange on which the given ticker is traded.
         '''
-        url=self.base_url+"quote/{}".format(ticker.upper())
+        url=self.base_url+"/quote/{}".format(ticker.upper())
         try:
             req=requests.get(url)
         except:
@@ -79,7 +79,7 @@ class YahooScraper:
         '''
         Returns true if market for the provided ticker is open at this moment.
         '''
-        url=self.base_url+"quote/{}".format(ticker.upper())
+        url=self.base_url+"/quote/{}".format(ticker.upper())
         result="UNKNOWN"
         try:
             req=requests.get(url)
