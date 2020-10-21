@@ -30,7 +30,7 @@ class Plot(Resource):
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
         filename=os.path.basename(plotpath)
-        return send_from_directory("/Users/glennviroux/Documents/VSCode/algoTrading/output/plots/back_plots/",filename,attachment_filename=filename)
+        return send_from_directory("./output/plots/back_plots/",filename,attachment_filename=filename)
 
 class Retrieve(Resource):
     def get(self,data_id):
@@ -197,5 +197,5 @@ api.add_resource(GetInfo,"/info/<string:info_id>")
 api.add_resource(ConfigCommands,"/config/")
 
 if __name__ == "__main__":
-    #application.run()
-    application.run(debug=True,host='192.168.0.14',port=5050)
+    application.run()
+    #application.run(debug=True,host='192.168.0.14',port=5050)
