@@ -3,4 +3,5 @@ past_sessions/*
 client.py
 __pycache__
 .DS_Store
+config/client_secret.json
 config/latest_state.json

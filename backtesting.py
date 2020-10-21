@@ -3,6 +3,9 @@
 
 from trade_logic import Stocks,AcceptParameters
 from yahoo_api import YahooAPI
+
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime,timedelta
 from collections import namedtuple
 import pandas as pd
@@ -109,7 +112,7 @@ class BackTesting(Stocks,YahooAPI):
             if not df_support.empty:
                 # stock was sold because it dropped below the initial support level
                 sold = df_support.iloc[0].timestamps
-                Pe = df_support.iloc[0].close
+                Pe = round(df_support.iloc[0].close,2)
                 self.results["stock"].append(stock)
                 self.results["start_date"].append(self.start)
                 self.results["bought"].append(bought)
@@ -170,4 +173,20 @@ class BackTesting(Stocks,YahooAPI):
     def append_csv(self):
         header = not os.path.isfile(self.csv_file)
         df = pd.DataFrame.from_dict(self.results) 
-        df.to_csv(self.csv_file,mode='a',columns=self.columns,header=header)     
+        df.to_csv(self.csv_file,mode='a',columns=self.columns,header=header)
+
+    def upload_to_drive(self):
+        self.append_csv()
+
+        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+
+        credentials = ServiceAccountCredentials.from_json_keyfile_name('./config/client_secret.json', scope)
+        client = gspread.authorize(credentials)
+
+        spreadsheet = client.open('algoTradingBacktesting')
+
+        with open('./output/backtesting/backtesting_cumulative.csv', 'r') as file_obj:
+            content = file_obj.read()
+            client.import_csv(spreadsheet.id, data=content)
+
