@@ -26,10 +26,6 @@ start_time=time.time()
 
 class BackTesting(Resource):
     def get(self,ticker):
-        if ticker=="clean_all":
-            os.system("rm ./output/backtesting/*")
-            return True
-
         plotpath=utils.get_plot(ticker)
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
@@ -182,6 +178,10 @@ class Commands(Resource):
             utils.clean_previous_sessions("./past_sessions/")
             commands.remove("CLEAN_PREVIOUS_SESSIONS")
 
+        if "CLEANBACKTESTING" in commands:
+            os.system("rm ./output/backtesting/*")
+            return {'message':'all good!'},200
+
         tickers_to_sell=[ticker for ticker in tickers_to_sell if ticker]
         tickers_to_stop_monitor=[ticker for ticker in tickers_to_stop_monitor if ticker]
         commands=[command for command in commands if command]
@@ -201,5 +201,5 @@ api.add_resource(GetInfo,"/info/<string:info_id>")
 api.add_resource(ConfigCommands,"/config/")
 
 if __name__ == "__main__":
-    application.run()
-    #application.run(debug=True,host='192.168.0.14',port=5050)
+    #application.run()
+    application.run(debug=True,host='192.168.0.14',port=5050)
