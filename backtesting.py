@@ -31,9 +31,9 @@ class BackTesting(Stocks,YahooAPI):
                         "number":[],"result":[],"derivative_factor":[],"surface_factor":[],
                         "EMA_surface_plus":[],"EMA_surface_min":[],"number_of_EMA_crossings":[],
                         "drop_period":[],"latest_drop":[],"support_level":[],"drop_buying":[],
-                        "support_level_buying":[],"start_date":[],"comment":[]}
+                        "support_level_buying":[],"start_date":[],"comment":[],"timestamp":[]}
 
-        self.columns = ['start_date','stock','bought','sold','price_bought','price_sold','number','result',
+        self.columns = ['timestamp','start_date','stock','bought','sold','price_bought','price_sold','number','result',
                     'derivative_factor','surface_factor','EMA_surface_plus','EMA_surface_min',
                     'number_of_EMA_crossings','drop_period','latest_drop','support_level',
                     'drop_buying','comment']
@@ -78,6 +78,7 @@ class BackTesting(Stocks,YahooAPI):
         df_index = df_cross_start[df_cross_start.crossing==-1]
         if df_index.empty:
             # If small EMA never goes below big EMA
+            self.results["timestamp"].append(utils.date_now())
             self.results["stock"].append(stock)
             self.results["start_date"].append(self.start)
             self.results["bought"].append('N/A')
@@ -113,6 +114,7 @@ class BackTesting(Stocks,YahooAPI):
                 # stock was sold because it dropped below the initial support level
                 sold = df_support.iloc[0].timestamps
                 Pe = round(df_support.iloc[0].close,2)
+                self.results["timestamp"].append(utils.date_now())
                 self.results["stock"].append(stock)
                 self.results["start_date"].append(self.start)
                 self.results["bought"].append(bought)
@@ -133,6 +135,7 @@ class BackTesting(Stocks,YahooAPI):
             # small EMA never rises again above big EMA
             Pe = round(df_cross_start.iloc[-1].close,2)
             sold = df_cross_start.iloc[-1].timestamps
+            self.results["timestamp"].append(utils.date_now())
             self.results["stock"].append(stock)
             self.results["start_date"].append(self.start)
             self.results["bought"].append(Pi)
@@ -152,7 +155,7 @@ class BackTesting(Stocks,YahooAPI):
         Pe = round(df_end.iloc[0].close,2)
         sold = df_end.iloc[0].timestamps
         W = round(N*(Pe-Pi),2)
-
+        self.results["timestamp"].append(utils.date_now())
         self.results["stock"].append(stock)
         self.results["start_date"].append(self.start)
         self.results["bought"].append(bought)

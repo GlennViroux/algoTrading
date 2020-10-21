@@ -24,8 +24,12 @@ config_parser.add_argument("logging",type=str,help="Post a new config value for 
 global start_time
 start_time=time.time()
 
-class Plot(Resource):
+class BackTesting(Resource):
     def get(self,ticker):
+        if ticker=="clean_all":
+            os.system("rm ./output/backtesting/*")
+            return True
+
         plotpath=utils.get_plot(ticker)
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
@@ -190,7 +194,7 @@ class Commands(Resource):
 application=Flask(__name__)
 api=Api(application)
 api.add_resource(Commands,"/commands/")
-api.add_resource(Plot,"/plots/<string:ticker>")
+api.add_resource(BackTesting,"/backtesting/<string:ticker>")
 api.add_resource(Retrieve,"/retrieve/<string:data_id>")
 api.add_resource(RetrievePastSessions,"/retrievepastsessions/<string:date>/<string:data_id>")
 api.add_resource(GetInfo,"/info/<string:info_id>")
