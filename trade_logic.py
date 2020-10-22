@@ -416,7 +416,8 @@ class Stocks(YahooAPI):
         start = date_datetime-timedelta(days=days_in_past)
         end = date_datetime
 
-        df_data = self.get_data(ticker, start, end, config_params['trade_logic']['yahoo_interval'], config_params['trade_logic']
+        yah = YahooAPI()
+        df_data = yah.get_data(ticker, start, end, config_params['trade_logic']['yahoo_interval'], config_params['trade_logic']
                                ['yahoo_period_small_EMA'], config_params['trade_logic']['yahoo_period_big_EMA'], logger=logger)
 
         self.update_yahoo_calls(add_call=True, logger=logger)
@@ -635,10 +636,12 @@ class Stocks(YahooAPI):
 
         self.check_to_monitor_new_stocks(date, config_params, logger, number_of_stocks)
 
+        '''
         for stock in self.monitored_stocks:
             df = pd.DataFrame.from_dict(self.monitored_stock_data[stock])
             self.plot_stock(stock,df,"./output/plots/",logger)
-
+        '''
+        
         logger.debug("Initialized stocks", extra={'function': FUNCTION})
         return True
 
