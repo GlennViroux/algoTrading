@@ -214,7 +214,7 @@ def start_algorithm(initial_state_file=None,config_file=None,fixed_rounds=None,s
     return True
 
 
-#start_algorithm(fixed_rounds=5)
+start_algorithm(fixed_rounds=1)
 
 
 

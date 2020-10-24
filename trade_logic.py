@@ -636,10 +636,12 @@ class Stocks(YahooAPI):
 
         self.check_to_monitor_new_stocks(date, config_params, logger, number_of_stocks)
 
+        '''
         for stock in self.monitored_stocks:
             df = pd.DataFrame.from_dict(self.monitored_stock_data[stock])
             self.plot_stock(stock,df,"./output/plots/",logger)
-
+        '''
+        
         logger.debug("Initialized stocks", extra={'function': FUNCTION})
         return True
 
