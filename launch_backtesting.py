@@ -21,10 +21,3 @@ b.upload_to_drive()
 
 print(b.get_daily_YQL_calls())
 print(b.get_hourly_YQL_calls())
-
-
-
-
-
-
-

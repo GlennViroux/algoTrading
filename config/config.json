@@ -1,13 +1,13 @@
 {
   "main": {
-    "seconds_to_sleep": "60",
+    "seconds_to_sleep": "240",
     "plot_data": "false",
-    "ignore_market_hours": "true",
+    "ignore_market_hours": "false",
     "include_pre_trading": "false",
     "include_post_trading": "false",
     "sell_all_before_finish": "false",
     "check_for_new_stocks": "false",
-    "initial_number_of_stocks": "5"
+    "initial_number_of_stocks": "20"
   },
   "trade_logic": {
     "money_to_spend": "500",

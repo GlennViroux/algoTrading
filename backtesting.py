@@ -60,6 +60,9 @@ class BackTesting(Stocks,YahooAPI):
         period_big_EMA = self.conf['trade_logic']['yahoo_period_big_EMA']
         df = self.get_data(stock,start_data,end_data,interval,period_small_EMA,period_big_EMA,self.logger)
 
+        if df.empty:
+            return False
+
         diff = df.smallEMA-df.bigEMA
         diff_sign = diff.apply(lambda x : np.sign(x))
         diff_series = diff_sign-diff_sign.shift(periods=1)
@@ -174,7 +177,7 @@ class BackTesting(Stocks,YahooAPI):
         return pd.DataFrame.from_dict(self.results)   
 
     def append_csv(self):
-        header = not os.path.isfile(self.csv_file)
+        header = not os.path.isfile(self.csv_file) or os.stat(self.csv_file).st_size==0
         df = pd.DataFrame.from_dict(self.results) 
         df.to_csv(self.csv_file,mode='a',columns=self.columns,header=header)
 
@@ -192,4 +195,19 @@ class BackTesting(Stocks,YahooAPI):
         with open('./output/backtesting/backtesting_cumulative.csv', 'r') as file_obj:
             content = file_obj.read()
             client.import_csv(spreadsheet.id, data=content)
+
+    @classmethod
+    def refresh_drive(cls):
+        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+
+        credentials = ServiceAccountCredentials.from_json_keyfile_name('./config/client_secret.json', scope)
+        client = gspread.authorize(credentials)
+
+        spreadsheet = client.open('algoTradingBacktesting')
+
+        with open('./output/backtesting/backtesting_cumulative.csv', 'r') as file_obj:
+            content = file_obj.read()
+            client.import_csv(spreadsheet.id, data=content)
+
 

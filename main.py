@@ -179,7 +179,10 @@ class Commands(Resource):
             commands.remove("CLEAN_PREVIOUS_SESSIONS")
 
         if "CLEANBACKTESTING" in commands:
-            os.system("rm ./output/backtesting/*")
+            os.system("rm ./output/backtesting/backtesting_cumulative.csv")
+            os.system("touch ./output/backtesting/backtesting_cumulative.csv")
+            from backtesting import BackTesting
+            BackTesting.refresh_drive()
             return {'message':'all good!'},200
 
         tickers_to_sell=[ticker for ticker in tickers_to_sell if ticker]
@@ -201,5 +204,5 @@ api.add_resource(GetInfo,"/info/<string:info_id>")
 api.add_resource(ConfigCommands,"/config/")
 
 if __name__ == "__main__":
-    #application.run()
-    application.run(debug=True,host='192.168.0.14',port=5050)
+    application.run()
+    #application.run(debug=True,host='192.168.0.14',port=5050)

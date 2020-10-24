@@ -416,7 +416,8 @@ class Stocks(YahooAPI):
         start = date_datetime-timedelta(days=days_in_past)
         end = date_datetime
 
-        df_data = self.get_data(ticker, start, end, config_params['trade_logic']['yahoo_interval'], config_params['trade_logic']
+        yah = YahooAPI()
+        df_data = yah.get_data(ticker, start, end, config_params['trade_logic']['yahoo_interval'], config_params['trade_logic']
                                ['yahoo_period_small_EMA'], config_params['trade_logic']['yahoo_period_big_EMA'], logger=logger)
 
         self.update_yahoo_calls(add_call=True, logger=logger)
