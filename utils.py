@@ -15,6 +15,8 @@ import shutil
 import errno
 import json
 import pytz
+import psutil
+
 from yahoo_api import YahooAPI
 
 ### LOG WRITING OPERATIONS ###
@@ -254,7 +256,7 @@ def get_latest_log(keyword,basepath="./output/",logger=None):
         return None
     return max(list_of_files, key=os.path.getctime)
 
-def get_plot(ticker):
+def get_back_plot(ticker):
     list_of_files=glob.glob('./output/plots/back_plots/*{}.png'.format(ticker.upper()))
     if not list_of_files:
         return None
@@ -543,3 +545,18 @@ def before_close(period=20):
     close=datetime(year=now.year,month=now.month,day=now.day,hour=22,minute=0,second=0,microsecond=0)
 
     return now>=close-timedelta(minutes=period)
+
+def is_process_running(process_name):
+    '''
+    Return True if any backtesting process is running.
+    '''
+    #Iterate over the all the running process
+    for proc in psutil.process_iter():
+        try:
+            # Check if process name contains the given name string.
+            for elem in proc.cmdline():
+                if process_name.lower() in elem:
+                    return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return False

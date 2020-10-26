@@ -23,6 +23,8 @@ class BackTesting(Stocks,YahooAPI):
             start = datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
         self.start = start
 
+        self.ip = "192.168.0.14"
+
         self.conf = utils.read_config("./config/config.json")
         self.logger=utils.configure_logger("default","./GLENNY_LOG.txt",self.conf["logging"])
         self.initialize_stocks(start,self.logger,self.conf,number_of_stocks)
@@ -45,6 +47,39 @@ class BackTesting(Stocks,YahooAPI):
 
     def get_hourly_YQL_calls(self):
         return self.yahoo_calls['hourly_calls']
+
+    def append_result(  
+        self,
+        timestamp,
+        stock,
+        start_date,
+        bought,
+        sold,
+        price_bought,
+        price_sold,
+        number,
+        result,
+        drop_buying,
+        support_level_buying,
+        comment):
+        '''
+        Append one result to the stack
+        '''
+        stock_field = "=HYPERLINK(\"http://{}:5050/backtesting/{}\",\"{}\")".format(self.ip,stock,stock)
+        self.results["timestamp"].append(timestamp)
+        self.results["stock"].append(stock_field)
+        self.results["start_date"].append(start_date)
+        self.results["bought"].append(bought)
+        self.results["sold"].append(sold)
+        self.results["price_bought"].append(price_bought)
+        self.results["price_sold"].append(price_sold)
+        self.results["number"].append(number)
+        self.results["result"].append(result)
+        self.results["drop_buying"].append(drop_buying)
+        self.results["support_level_buying"].append(support_level_buying)
+        self.results["comment"].append(comment)
+        for param in self.ACCEPT_PARAMS:
+            self.results[param].append(round(self.current_status[stock][param],2))
 
     def calculate_result(self,stock):
         if not stock in self.monitored_stocks:
@@ -81,20 +116,19 @@ class BackTesting(Stocks,YahooAPI):
         df_index = df_cross_start[df_cross_start.crossing==-1]
         if df_index.empty:
             # If small EMA never goes below big EMA
-            self.results["timestamp"].append(utils.date_now())
-            self.results["stock"].append(stock)
-            self.results["start_date"].append(self.start)
-            self.results["bought"].append('N/A')
-            self.results["sold"].append('N/A')
-            self.results["price_bought"].append(0)
-            self.results["price_sold"].append(0)
-            self.results["number"].append(0)
-            self.results["result"].append(0)
-            self.results["drop_buying"].append(0)
-            self.results["support_level_buying"].append(0)
-            self.results["comment"].append("Never bought")
-            for param in self.ACCEPT_PARAMS:
-                self.results[param].append(0)
+            self.append_result(
+                timestamp=utils.date_now(),
+                stock=stock,
+                start_date=self.start,
+                bought='N/A',
+                sold='N/A',
+                price_bought=0,
+                price_sold=0,
+                number=0,
+                result=0,
+                drop_buying=0,
+                support_level_buying=0,
+                comment="Never bought")
             return False
 
         Pi_index = df_index.index.values[0]
@@ -117,20 +151,19 @@ class BackTesting(Stocks,YahooAPI):
                 # stock was sold because it dropped below the initial support level
                 sold = df_support.iloc[0].timestamps
                 Pe = round(df_support.iloc[0].close,2)
-                self.results["timestamp"].append(utils.date_now())
-                self.results["stock"].append(stock)
-                self.results["start_date"].append(self.start)
-                self.results["bought"].append(bought)
-                self.results["sold"].append(sold)
-                self.results["price_bought"].append(Pi)
-                self.results["price_sold"].append(Pe)
-                self.results["number"].append(N)
-                self.results["result"].append(round(N*(Pe-Pi),2))
-                self.results["drop_buying"].append(drop_buying)
-                self.results["support_level_buying"].append(support_level_buying)
-                self.results["comment"].append("Bought and sold because of support level")
-                for param in self.ACCEPT_PARAMS:
-                    self.results[param].append(round(self.current_status[stock][param],2))
+                self.append_result(
+                    timestamp=utils.date_now(),
+                    stock=stock,
+                    start_date=self.start,
+                    bought=bought,
+                    sold=sold,
+                    price_bought=Pi,
+                    price_sold=Pe,
+                    number=N,
+                    result=round(N*(Pe-Pi),2),
+                    drop_buying=drop_buying,
+                    support_level_buying=support_level_buying,
+                    comment="Bought and sold because of support level")
 
                 return False
 
@@ -138,40 +171,40 @@ class BackTesting(Stocks,YahooAPI):
             # small EMA never rises again above big EMA
             Pe = round(df_cross_start.iloc[-1].close,2)
             sold = df_cross_start.iloc[-1].timestamps
-            self.results["timestamp"].append(utils.date_now())
-            self.results["stock"].append(stock)
-            self.results["start_date"].append(self.start)
-            self.results["bought"].append(Pi)
-            self.results["sold"].append(sold)
-            self.results["price_bought"].append(Pi)
-            self.results["price_sold"].append(Pe)
-            self.results["number"].append(N)
-            self.results["result"].append(round(N*(Pe-Pi),2))
-            self.results["drop_buying"].append(drop_buying)
-            self.results["support_level_buying"].append(support_level_buying)
-            self.results["comment"].append("Bought but never sold")
-            for param in self.ACCEPT_PARAMS:
-                self.results[param].append(round(self.current_status[stock][param],2))
+
+            self.append_result(
+                timestamp=utils.date_now(),
+                stock=stock,
+                start_date=self.start,
+                bought=bought,
+                sold=sold,
+                price_bought=Pi,
+                price_sold=Pe,
+                number=N,
+                result=round(N*(Pe-Pi),2),
+                drop_buying=drop_buying,
+                support_level_buying=support_level_buying,
+                comment="Bought but never sold")
 
             return False
 
         Pe = round(df_end.iloc[0].close,2)
         sold = df_end.iloc[0].timestamps
         W = round(N*(Pe-Pi),2)
-        self.results["timestamp"].append(utils.date_now())
-        self.results["stock"].append(stock)
-        self.results["start_date"].append(self.start)
-        self.results["bought"].append(bought)
-        self.results["sold"].append(sold)
-        self.results["price_bought"].append(Pi)
-        self.results["price_sold"].append(Pe)
-        self.results["number"].append(N)
-        self.results["result"].append(W)
-        self.results["drop_buying"].append(drop_buying)
-        self.results["support_level_buying"].append(support_level_buying)
-        self.results["comment"].append("Bought and sold")
-        for param in self.ACCEPT_PARAMS:
-            self.results[param].append(round(self.current_status[stock][param],2))
+
+        self.append_result(
+            timestamp=utils.date_now(),
+            stock=stock,
+            start_date=self.start,
+            bought=bought,
+            sold=sold,
+            price_bought=Pi,
+            price_sold=Pe,
+            number=N,
+            result=W,
+            drop_buying=drop_buying,
+            support_level_buying=support_level_buying,
+            comment="Bought and sold")
 
     def get_df(self):
         return pd.DataFrame.from_dict(self.results)   

@@ -76,6 +76,7 @@ class AcceptParameters:
         This function checks whether we should sell a stock because it drops below
         it's support level.
         '''
+        # TODO comparison between tz-aware and tz-naive datetimes
         df = self.df_data[self.df_data.timestamps<=date]
         support_level = self.get_support_level(date)
         latest_price = df.close.iloc[-1]
@@ -332,7 +333,16 @@ class Stocks(YahooAPI):
         self.current_status = current_status
         self.interesting_stocks = interesting_stocks
         self.not_interesting_stocks = not_interesting_stocks
-        self.yahoo_calls = yahoo_calls
+
+        if yahoo_calls:
+            self.yahoo_calls = yahoo_calls
+        else:
+            self.yahoo_calls = {
+                'last_timestamp_day': utils.date_now(),
+                'last_hour': datetime.now().hour,
+                'daily_calls': 0,
+                'hourly_calls': 0
+            }
 
         self.initial_virtual_result = 0
         self.initial_final_result = 0
@@ -357,7 +367,7 @@ class Stocks(YahooAPI):
                 "final_result":self.initial_final_result
             }
 
-    def update_yahoo_calls(self, add_call, logger):
+    def update_yahoo_calls(self, add_call, logger=None):
         FUNCTION = 'add_yahoo_call'
         '''
         Add yahoo call to the records. This is done in order to check compliance with the limits.
@@ -382,7 +392,8 @@ class Stocks(YahooAPI):
             if add_call:
                 data['daily_calls'] += 1
         else:
-            logger.error("Day present in object is after current day. Bad bad programmer, this should never occur.", extra={
+            if logger:
+                logger.error("Day present in object is after current day. Bad bad programmer, this should never occur.", extra={
                          'function': FUNCTION})
 
         if now.hour > data['last_hour'] or now.hour < data['last_hour']:
@@ -641,7 +652,7 @@ class Stocks(YahooAPI):
             df = pd.DataFrame.from_dict(self.monitored_stock_data[stock])
             self.plot_stock(stock,df,"./output/plots/",logger)
         '''
-        
+
         logger.debug("Initialized stocks", extra={'function': FUNCTION})
         return True
 

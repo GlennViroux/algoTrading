@@ -7,6 +7,7 @@ import json
 import time
 
 from main_algo import start_algorithm
+from launch_backtesting import main as main_backtesting
 
 OUTPUT_DIR="./output/"
 
@@ -14,6 +15,12 @@ commands_parser=reqparse.RequestParser()
 commands_parser.add_argument("tickers_to_sell",type=str,help="Ticker of which you want to sell all currently owned stocks.")
 commands_parser.add_argument("tickers_to_stop_monitor",type=str,help="Tickers you wish to stop monitoring.")
 commands_parser.add_argument("commands",type=str,help="General commands you want to pass.")
+
+backtesting_parser=reqparse.RequestParser()
+backtesting_parser.add_argument("command",required=True,type=str)
+backtesting_parser.add_argument("days",type=int)
+backtesting_parser.add_argument("number",type=int)
+
 
 config_parser=reqparse.RequestParser()
 config_parser.add_argument("main",type=str,help="Post a new config value for main. Example: str(seconds_to_sleep:30).")
@@ -26,11 +33,40 @@ start_time=time.time()
 
 class BackTesting(Resource):
     def get(self,ticker):
-        plotpath=utils.get_plot(ticker)
+        if ticker.lower()=="isrunning":
+            isrunning = "False"
+            if utils.is_process_running("launch_backtesting"):
+                isrunning = "True"
+            return {"isrunning":isrunning},200
+
+        plotpath=utils.get_back_plot(ticker)
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
         filename=os.path.basename(plotpath)
         return send_from_directory("./output/plots/back_plots/",filename,attachment_filename=filename)
+
+    def post(self):
+        msg = 'All good!'
+        args=backtesting_parser.parse_args()
+
+        command = args['command']
+        if command.lower()=="cleanbacktesting":
+            os.system("rm ./output/plots/back_plots/*png")
+            os.system("rm ./output/backtesting/backtesting_cumulative.csv")
+            os.system("touch ./output/backtesting/backtesting_cumulative.csv")
+            from backtesting import BackTesting
+            BackTesting.refresh_drive()
+        elif command.lower()=="launchbacktesting":
+            days = args['days'] if args['days'] else 42
+            number = args['number'] if args['number'] else 1
+            backtesting_thread = threading.Thread(target=main_backtesting,name='main_backtesting',kwargs={'days':days,'number':number})
+            backtesting_thread.start()
+            return "All good!",200
+        else:
+            abort(404,message='A not valid command ({}) was provided.'.format(command))
+
+        return msg,200
+
 
 class Retrieve(Resource):
     def get(self,data_id):
@@ -59,12 +95,15 @@ class GetInfo(Resource):
     def get(self,info_id):
         if info_id.upper()=="ALGOSTATUS":
             isrunning="No"
+            is_backtesting_running="No"
             duration="0"
             for thread in threading.enumerate():
                 if thread.getName()=="main_algo":
                     isrunning="Yes"
                     duration=str(time.time()-start_time)
-            return make_response(jsonify(isrunning=isrunning,duration=duration),200)
+                elif thread.getName()=='main_backtesting':
+                    is_backtesting_running="Yes"
+            return make_response(jsonify(isrunning=isrunning,duration=duration,is_backtesting_running=is_backtesting_running),200)
 
         elif info_id.upper()=="PASTSESSIONS":
             past_sessions=utils.get_dates_past_sessions()
@@ -178,13 +217,6 @@ class Commands(Resource):
             utils.clean_previous_sessions("./past_sessions/")
             commands.remove("CLEAN_PREVIOUS_SESSIONS")
 
-        if "CLEANBACKTESTING" in commands:
-            os.system("rm ./output/backtesting/backtesting_cumulative.csv")
-            os.system("touch ./output/backtesting/backtesting_cumulative.csv")
-            from backtesting import BackTesting
-            BackTesting.refresh_drive()
-            return {'message':'all good!'},200
-
         tickers_to_sell=[ticker for ticker in tickers_to_sell if ticker]
         tickers_to_stop_monitor=[ticker for ticker in tickers_to_stop_monitor if ticker]
         commands=[command for command in commands if command]
@@ -197,12 +229,12 @@ class Commands(Resource):
 application=Flask(__name__)
 api=Api(application)
 api.add_resource(Commands,"/commands/")
-api.add_resource(BackTesting,"/backtesting/<string:ticker>")
+api.add_resource(BackTesting,"/backtesting/<string:ticker>","/backtesting/")
 api.add_resource(Retrieve,"/retrieve/<string:data_id>")
 api.add_resource(RetrievePastSessions,"/retrievepastsessions/<string:date>/<string:data_id>")
 api.add_resource(GetInfo,"/info/<string:info_id>")
 api.add_resource(ConfigCommands,"/config/")
 
 if __name__ == "__main__":
-    application.run()
-    #application.run(debug=True,host='192.168.0.14',port=5050)
+    #application.run()
+    application.run(debug=True,host='192.168.0.14',port=5050)
