@@ -15,7 +15,6 @@ import shutil
 import errno
 import json
 import pytz
-import psutil
 
 from yahoo_api import YahooAPI
 
@@ -546,17 +545,3 @@ def before_close(period=20):
 
     return now>=close-timedelta(minutes=period)
 
-def is_process_running(process_name):
-    '''
-    Return True if any backtesting process is running.
-    '''
-    #Iterate over the all the running process
-    for proc in psutil.process_iter():
-        try:
-            # Check if process name contains the given name string.
-            for elem in proc.cmdline():
-                if process_name.lower() in elem:
-                    return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
-    return False
