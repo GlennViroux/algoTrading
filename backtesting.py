@@ -35,21 +35,17 @@ class BackTesting(Stocks,YahooAPI):
                         "drop_period":[],"latest_drop":[],"support_level":[],"drop_buying":[],
                         "support_level_buying":[],"start_date":[],"comment":[],"timestamp":[]}
 
-        self.columns = ['timestamp','start_date','stock','bought','sold','price_bought','price_sold','number','result',
-                    'derivative_factor','surface_factor','EMA_surface_plus','EMA_surface_min',
-                    'number_of_EMA_crossings','drop_period','latest_drop','support_level',
-                    'drop_buying','comment']
+        self.columns = ['timestamp','stock','result','comment','start_date','bought','sold','price_bought','price_sold','number',
+                    'surface_factor','EMA_surface_plus','EMA_surface_min',
+                    'number_of_EMA_crossings','latest_drop','support_level',
+                    'drop_buying']
 
         self.csv_file = "./output/backtesting/backtesting_cumulative.csv"
-
-    def get_daily_YQL_calls(self):
-        return self.yahoo_calls['daily_calls']
-
-    def get_hourly_YQL_calls(self):
-        return self.yahoo_calls['hourly_calls']
+        self.callsYQL_file = "./output/backtesting/calls_yql.json"
 
     def append_result(  
         self,
+        df,
         timestamp,
         stock,
         start_date,
@@ -81,6 +77,13 @@ class BackTesting(Stocks,YahooAPI):
         for param in self.ACCEPT_PARAMS:
             self.results[param].append(round(self.current_status[stock][param],2))
 
+        if isinstance(bought,str):
+            bought=None
+        if isinstance(sold,str):
+            sold=None
+
+        self.plot_stock(stock,df,"./output/plots/back_plots/",self.logger,start=start_date,bought=bought,sold=sold,support_level=support_level_buying)
+
     def calculate_result(self,stock):
         if not stock in self.monitored_stocks:
             return False
@@ -108,8 +111,6 @@ class BackTesting(Stocks,YahooAPI):
         df_cross = df[(df.crossing==1) | (df.crossing==-1)]
         df_cross_start = df_cross[df_cross.timestamps>=self.start]
 
-        self.plot_stock(stock,df,"./output/plots/back_plots/",self.logger)
-
         # Search where small EMA < big EMA
         M = 500
         Pavg = 20
@@ -117,6 +118,7 @@ class BackTesting(Stocks,YahooAPI):
         if df_index.empty:
             # If small EMA never goes below big EMA
             self.append_result(
+                df=df,
                 timestamp=utils.date_now(),
                 stock=stock,
                 start_date=self.start,
@@ -129,6 +131,7 @@ class BackTesting(Stocks,YahooAPI):
                 drop_buying=0,
                 support_level_buying=0,
                 comment="Never bought")
+                
             return False
 
         Pi_index = df_index.index.values[0]
@@ -144,35 +147,13 @@ class BackTesting(Stocks,YahooAPI):
         # df_end is the dataframe between the point where smallEMA goes under bigEMA
         # and the point where smallEMA goes over bigEMA 
         df_end = df_cross_start[(df_cross_start.index>Pi_index) & (df_cross_start.crossing==1)]
-        if not df_end.empty:
-            support_level = self.current_status[stock]["support_level"]
-            df_support = df_end[df_end.close<=support_level]
-            if not df_support.empty:
-                # stock was sold because it dropped below the initial support level
-                sold = df_support.iloc[0].timestamps
-                Pe = round(df_support.iloc[0].close,2)
-                self.append_result(
-                    timestamp=utils.date_now(),
-                    stock=stock,
-                    start_date=self.start,
-                    bought=bought,
-                    sold=sold,
-                    price_bought=Pi,
-                    price_sold=Pe,
-                    number=N,
-                    result=round(N*(Pe-Pi),2),
-                    drop_buying=drop_buying,
-                    support_level_buying=support_level_buying,
-                    comment="Bought and sold because of support level")
-
-                return False
-
         if df_end.empty:
             # small EMA never rises again above big EMA
             Pe = round(df_cross_start.iloc[-1].close,2)
             sold = df_cross_start.iloc[-1].timestamps
 
             self.append_result(
+                df=df,
                 timestamp=utils.date_now(),
                 stock=stock,
                 start_date=self.start,
@@ -185,14 +166,40 @@ class BackTesting(Stocks,YahooAPI):
                 drop_buying=drop_buying,
                 support_level_buying=support_level_buying,
                 comment="Bought but never sold")
-
             return False
+
+        support_level = self.current_status[stock]["support_level"]
+        df_support = df[(df.timestamps>=bought) & (df.close<=support_level)]
+
+        if not df_support.empty:
+            support_crossing = df_support.iloc[0].timestamps
+            if support_crossing <= df_end.iloc[0].timestamps:
+                # stock was sold because it dropped below the initial support level
+                # before the smallEMA rose above the bigEMA
+                Pe = round(df_support.iloc[0].close,2)
+                self.append_result(
+                    df=df,
+                    timestamp=utils.date_now(),
+                    stock=stock,
+                    start_date=self.start,
+                    bought=bought,
+                    sold=support_crossing,
+                    price_bought=Pi,
+                    price_sold=Pe,
+                    number=N,
+                    result=round(N*(Pe-Pi),2),
+                    drop_buying=drop_buying,
+                    support_level_buying=support_level_buying,
+                    comment="Bought and sold because of support level")
+
+                return False
 
         Pe = round(df_end.iloc[0].close,2)
         sold = df_end.iloc[0].timestamps
         W = round(N*(Pe-Pi),2)
 
         self.append_result(
+            df=df,
             timestamp=utils.date_now(),
             stock=stock,
             start_date=self.start,
@@ -208,6 +215,9 @@ class BackTesting(Stocks,YahooAPI):
 
     def get_df(self):
         return pd.DataFrame.from_dict(self.results)   
+
+    def update_yql_calls_file(self):
+        utils.write_json(self.yahoo_calls,self.callsYQL_file)
 
     def append_csv(self):
         header = not os.path.isfile(self.csv_file) or os.stat(self.csv_file).st_size==0

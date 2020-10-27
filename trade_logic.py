@@ -341,7 +341,8 @@ class Stocks(YahooAPI):
                 'last_timestamp_day': utils.date_now(),
                 'last_hour': datetime.now().hour,
                 'daily_calls': 0,
-                'hourly_calls': 0
+                'hourly_calls': 0,
+                'total_calls':0
             }
 
         self.initial_virtual_result = 0
@@ -377,13 +378,17 @@ class Stocks(YahooAPI):
                 'last_timestamp_day': utils.date_now(),
                 'last_hour': datetime.now().hour,
                 'daily_calls': 0,
-                'hourly_calls': 0
+                'hourly_calls': 0,
+                'total_calls':0
             }
 
         data = self.yahoo_calls
         last_date = datetime.strptime(
             data['last_timestamp_day'], "%Y/%m/%d-%H:%M:%S").date()
         now = datetime.now()
+
+        if add_call:
+            data['total_calls'] += 1
 
         if now.date() > last_date:
             data['last_timestamp_day'] = utils.date_now()
@@ -634,8 +639,7 @@ class Stocks(YahooAPI):
         # TODO this is only for NASDAQ!
         file = './nasdaqtraded.txt'
         if update_nasdaq_file:
-            logger.info("Updating nasdaqtraded file",
-                        extra={'function': FUNCTION})
+            logger.info("Updating nasdaqtraded file",extra={'function': FUNCTION})
             with closing(request.urlopen('ftp://ftp.nasdaqtrader.com/symboldirectory/nasdaqtraded.txt')) as r:
                 with open(file, 'wb') as f:
                     shutil.copyfileobj(r, f)
@@ -967,7 +971,7 @@ class Stocks(YahooAPI):
             df = pd.DataFrame.from_dict(self.monitored_stock_data[ticker])
             self.plot_stock(ticker,df,output_dir_plots,logger)
 
-    def plot_stock(self,stock,df,output_dir_plots,logger):
+    def plot_stock(self,stock,df,output_dir_plots,logger,start=None,bought=None,sold=None,support_level=None):
         FUNCTION="plot_stock"
         '''
         Plot price data for one stock
@@ -983,10 +987,10 @@ class Stocks(YahooAPI):
         last = x.iloc[-1]
 
         fig,axes = plt.subplots(1,len(gaps)+1,sharey=True,figsize=(20,6),dpi=200)
-        self.plot_subplot(axes[0],df,first,gaps[0][0])
+        self.plot_subplot(axes[0],df,first,gaps[0][0],start=start,bought=bought,sold=sold,support_level=support_level)
         for i in range(1,len(gaps)):
-            self.plot_subplot(axes[i],df,left=gaps[i-1][1],right=gaps[i][0])
-        self.plot_subplot(axes[len(gaps)],df,left=gaps[-1][1],right=last)
+            self.plot_subplot(axes[i],df,left=gaps[i-1][1],right=gaps[i][0],start=start,bought=bought,sold=sold,support_level=support_level)
+        self.plot_subplot(axes[len(gaps)],df,left=gaps[-1][1],right=last,start=start,bought=bought,sold=sold,support_level=support_level)
         fig.subplots_adjust(wspace=0.0001)
         fig.suptitle("Stock data for {}".format(stock),fontsize='xx-large')
 
@@ -996,14 +1000,24 @@ class Stocks(YahooAPI):
         plt.close()
         del fig
 
-    def plot_subplot(self,ax,df,left,right):
+    def plot_subplot(self,ax,df,left,right,start=None,bought=None,sold=None,support_level=None):
         x = pd.to_datetime(df.timestamps)
         ax.set_xlim(left=left,right=right)
+
+        if start:
+            ax.axvspan(xmin=datetime(1900,1,1),xmax=start,alpha=0.4,facecolor='tab:red')
+
+        if bought and sold:
+            ax.axvspan(xmin=bought,xmax=sold,alpha=0.4,facecolor='tab:olive')
+
         ax.plot(x,df.close,label="Closes")
         if "smallEMA" in df:
             ax.plot(x,df.smallEMA,label="smallEMA")
         if "bigEMA" in df:
             ax.plot(x,df.bigEMA,label="bigEMA")
+        if isinstance(support_level,(float,int)):
+            ax.plot(x,np.full((len(x),1),support_level),label="Support Level")
+
         ax.grid()
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d-%H'))
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)

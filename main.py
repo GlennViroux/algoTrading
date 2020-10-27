@@ -33,12 +33,11 @@ start_time=time.time()
 
 class BackTesting(Resource):
     def get(self,ticker):
-        if ticker.lower()=="isrunning":
-            isrunning = "False"
-            if utils.is_process_running("launch_backtesting"):
-                isrunning = "True"
-            return {"isrunning":isrunning},200
-
+        if ticker.lower()=="yql_calls":
+            yql_calls = utils.read_json_data('./output/backtesting/calls_yql.json')
+            if not yql_calls:
+                yql_calls = {'hourly_calls':0,'daily_calls':0,'total_calls':0}
+            return make_response(yql_calls,200)
         plotpath=utils.get_back_plot(ticker)
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))

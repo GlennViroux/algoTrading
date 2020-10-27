@@ -22,9 +22,8 @@ def main(days=None,number=None):
     for stock in b.monitored_stocks:
         b.calculate_result(stock)
     b.upload_to_drive()
+    b.update_yql_calls_file()
 
-    return "All good!"
-    #return {'daily_calls':b.get_daily_YQL_calls(),'hourly_calls':b.get_hourly_YQL_calls()}
 
 if __name__=='__main__':
     main()
