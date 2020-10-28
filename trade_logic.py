@@ -76,8 +76,8 @@ class AcceptParameters:
         This function checks whether we should sell a stock because it drops below
         it's support level.
         '''
-        # TODO comparison between tz-aware and tz-naive datetimes
-        df = self.df_data[self.df_data.timestamps<=date]
+        date_aware = date.replace(tzinfo=pytz.timezone("Etc/GMT-2"))
+        df = self.df_data[self.df_data.timestamps<=date_aware]
         support_level = self.get_support_level(date)
         latest_price = df.close.iloc[-1]
 
