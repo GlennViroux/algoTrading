@@ -38,7 +38,7 @@ class BackTesting(Resource):
             yql_calls = utils.read_json_data('./output/backtesting/calls_yql.json')
             if not yql_calls:
                 yql_calls = {'hourly_calls':0,'daily_calls':0,'total_calls':0}
-            return make_response(yql_calls,200)
+            return make_response(jsonify(hourly_calls=yql_calls['hourly_calls'],daily_calls=yql_calls['daily_calls'],total_calls=yql_calls['total_calls']),200)
         plotpath=utils.get_back_plot(ticker)
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
@@ -238,5 +238,5 @@ api.add_resource(GetInfo,"/info/<string:info_id>")
 api.add_resource(ConfigCommands,"/config/")
 
 if __name__ == "__main__":
-    #application.run()
-    application.run(debug=True,host='192.168.0.14',port=5050)
+    application.run()
+    #application.run(debug=True,host='192.168.0.14',port=5050)
