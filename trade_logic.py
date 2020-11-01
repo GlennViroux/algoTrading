@@ -5,6 +5,7 @@ import time
 import glob
 import os
 import pytz
+import random
 from yahoo_scraping import YahooScraper
 from ticker_alpha import Alpha
 import utils
@@ -122,14 +123,21 @@ class AcceptParameters:
         '''
         Gets the latest drop of the price of the stock, in %/h
         '''
+        #print("Getting latest drop at date: ",date)
         period = self.config_params['trade_logic']['drop_period']
         date_aware = date.replace(tzinfo=pytz.timezone("Etc/GMT+4"))
+        #print(date_aware)
         df = self.df_data[self.df_data.timestamps<=date_aware]
+        #print(self.df_data)
+        #print(df)
         deltas = df.timestamps - df.timestamps.shift(periods=1)
         data_sampling = deltas.mode().iloc[0]
         data_points = round(timedelta(seconds=period)/data_sampling)
 
         df_rel = df.tail(data_points)
+
+        #print(df_rel)
+        #print(data_points)
 
         if df_rel.empty:
             logger.info("Empty DataFrame was obtained with {} latest datapoints (data sampling: {} period: {})".format(data_points,data_sampling,period),extra={'function':FUNCTION})
@@ -142,9 +150,17 @@ class AcceptParameters:
         #print("Max val: ",max_val)
         #print("Min val: ",min_val)
 
-        time_diff = df_rel.timestamps.loc[df_rel.close.idxmax()] - df_rel.timestamps.loc[df_rel.close.idxmin()]
-        time_diff_seconds = abs(time_diff.total_seconds())
-        factor = time_diff_seconds/3600
+        stamp_min = df_rel.timestamps.loc[df_rel.close.idxmin()]
+        stamp_max = df_rel.timestamps.loc[df_rel.close.idxmax()]
+
+        first_stamp = min(stamp_min,stamp_max)
+        second_stamp = max(stamp_min,stamp_max)
+
+        timediffs = df_rel[(df_rel.timestamps>=first_stamp) & (df_rel.timestamps<=second_stamp)].timestamps.diff()
+        timediffs_filtered = timediffs[timediffs < timedelta(minutes=500)]
+        time_diff_seconds = abs(timediffs_filtered.sum().total_seconds())
+        #print("Time diff seconds: ",time_diff_seconds)
+        factor = time_diff_seconds/period
         #print("Rel diff perc: ",rel_diff_perc)
         #print("Factor: ",factor)
         result = rel_diff_perc/factor
@@ -325,6 +341,7 @@ class Stocks(YahooAPI):
                 'hourly_calls' : ...
             }
         '''
+        super().__init__()
         self.balance = balance
         self.bought_stocks = bought_stocks
         self.monitored_stocks = monitored_stocks
@@ -553,11 +570,68 @@ class Stocks(YahooAPI):
         logger.info("Stock {} was added to the list of stocks to be monitored".format(
             stock), extra={'function': FUNCTION})
 
-    def check_to_monitor_new_stocks(self,
-                                    date,
-                                    config_params, 
-                                    logger,
-                                    number_of_stocks=None):
+    def check_stock(self,ticker,date,config_params,logger):
+        FUNCTION = 'check_stock'
+        '''
+        Check if the provided ticker should be monitored.
+        '''
+        logger.debug("Checking {}".format(ticker),extra={'function': FUNCTION})
+        scraper = YahooScraper()
+        exchange = scraper.get_exchange(ticker, logger)
+        if not exchange:
+            self.not_interesting_stocks.append(ticker)
+            logger.debug("Ticker {} was skipped because no valid response was received from the get_exchange function.".format(
+                ticker), extra={'function': FUNCTION})
+            return False
+
+        df_data = self.get_latest_data(ticker, date, exchange, config_params, logger)
+
+        if df_data.empty:
+            self.not_interesting_stocks.append(ticker)
+            logger.debug("No data was received from the yahooAPI", extra={
+                            'function': FUNCTION})
+            return False
+
+        params = AcceptParameters(ticker, exchange, df_data, config_params)
+        params.get_support_level(date)
+        params.get_latest_drop(date,logger)
+
+        if not params.accept_stock(date,logger):
+            self.not_interesting_stocks.append(ticker)
+            logger.debug("Ticker {} was skipped because it didn't pass the tests.".format(
+                ticker), extra={'function': FUNCTION})
+            return False
+
+        fullname = scraper.get_fullname(ticker, logger)
+        if not fullname:
+            self.not_interesting_stocks.append(ticker)
+            logger.debug("Ticker {} was skipped because no valid response was received from the get_fullname function.".format(
+                ticker), extra={'function': FUNCTION})
+            return False
+
+        description = scraper.get_description(ticker, logger)
+        if not description:
+            self.not_interesting_stocks.append(ticker)
+            logger.debug("Ticker {} was skipped because no valid response was received from the get_description function.".format(
+                ticker), extra={'function': FUNCTION})
+            return False
+
+        market_state = scraper.check_market_state(ticker, logger=logger)
+        if market_state == "UNKNOWN":
+            self.not_interesting_stocks.append(ticker)
+            logger.debug("Ticker {} was skipped because no valid response was received from the check_market_state function.".format(
+                ticker), extra={'function': FUNCTION})
+            return False
+
+        self.add_new_stock(ticker, df_data, exchange, params,fullname, description, market_state, logger)
+
+    def check_to_monitor_new_stocks(
+        self,
+        date,
+        config_params, 
+        logger,
+        number_of_stocks=None,
+        stocks = None):
         FUNCTION = 'check_to_monitor_new_stocks'
         '''
         Check if we should add a new stock to monitor
@@ -565,67 +639,26 @@ class Stocks(YahooAPI):
         if not number_of_stocks:
             number_of_stocks = config_params['main']['initial_number_of_stocks']
 
-        while len(self.monitored_stocks) < number_of_stocks:
-            ticker = self.get_new_interesting_stock(logger)
+        if stocks and isinstance(stocks,list):
+            logger.info("Checking {} provided stocks.".format(len(stocks)),extra={'function':FUNCTION})
+            for stock in stocks:
+                self.check_stock(stock,date,config_params,logger)
+        else:
+            logger.info("Checking to obtain {} random stocks.".format(number_of_stocks),extra={'function':FUNCTION})
+            while len(self.monitored_stocks) < number_of_stocks:
+                ticker = self.get_new_interesting_stock(logger)
+                self.check_stock(ticker,date,config_params,logger)
 
-            logger.debug("Checking {}".format(ticker),
-                         extra={'function': FUNCTION})
-            scraper = YahooScraper()
-            exchange = scraper.get_exchange(ticker, logger)
-            if not exchange:
-                self.not_interesting_stocks.append(ticker)
-                logger.debug("Ticker {} was skipped because no valid response was received from the get_exchange function.".format(
-                    ticker), extra={'function': FUNCTION})
-                continue
 
-            df_data = self.get_latest_data(ticker, date, exchange, config_params, logger)
 
-            if df_data.empty:
-                self.not_interesting_stocks.append(ticker)
-                logger.debug("No data was received from the yahooAPI", extra={
-                             'function': FUNCTION})
-                continue
-
-            params = AcceptParameters(ticker, exchange, df_data, config_params)
-            params.get_support_level(date)
-            params.get_latest_drop(date,logger)
-
-            if not params.accept_stock(date,logger):
-                self.not_interesting_stocks.append(ticker)
-                logger.debug("Ticker {} was skipped because it didn't pass the tests.".format(
-                    ticker), extra={'function': FUNCTION})
-                continue
-
-            fullname = scraper.get_fullname(ticker, logger)
-            if not fullname:
-                self.not_interesting_stocks.append(ticker)
-                logger.debug("Ticker {} was skipped because no valid response was received from the get_fullname function.".format(
-                    ticker), extra={'function': FUNCTION})
-                continue
-
-            description = scraper.get_description(ticker, logger)
-            if not description:
-                self.not_interesting_stocks.append(ticker)
-                logger.debug("Ticker {} was skipped because no valid response was received from the get_description function.".format(
-                    ticker), extra={'function': FUNCTION})
-                continue
-
-            market_state = scraper.check_market_state(ticker, logger=logger)
-            if market_state == "UNKNOWN":
-                self.not_interesting_stocks.append(ticker)
-                logger.debug("Ticker {} was skipped because no valid response was received from the check_market_state function.".format(
-                    ticker), extra={'function': FUNCTION})
-                continue
-
-            self.add_new_stock(ticker, df_data, exchange, params,
-                               fullname, description, market_state, logger)
-
-    def initialize_stocks(self, 
-                        date,
-                        logger, 
-                        config_params, 
-                        number_of_stocks=None, 
-                        update_nasdaq_file=False):
+    def initialize_stocks(
+        self, 
+        date,
+        logger, 
+        config_params, 
+        number_of_stocks=None, 
+        stocks=None,
+        update_nasdaq_file=False):
         FUNCTION = 'initialize_stocks'
         '''
         1) find interesting stocks
@@ -647,15 +680,14 @@ class Stocks(YahooAPI):
         df = pd.read_csv(file, delimiter='|')
         df.drop(df.tail(1).index, inplace=True)
 
-        self.interesting_stocks = list(set(df.Symbol))
+        nasdaq_stocks = list(df.Symbol)
+        random.shuffle(nasdaq_stocks)
 
-        self.check_to_monitor_new_stocks(date, config_params, logger, number_of_stocks)
+        logger.debug("{} interesting stocks found".format(len(stocks)), extra={'function': FUNCTION})
 
-        '''
-        for stock in self.monitored_stocks:
-            df = pd.DataFrame.from_dict(self.monitored_stock_data[stock])
-            self.plot_stock(stock,df,"./output/plots/",logger)
-        '''
+        self.interesting_stocks = nasdaq_stocks
+
+        self.check_to_monitor_new_stocks(date, config_params, logger, number_of_stocks, stocks)
 
         logger.debug("Initialized stocks", extra={'function': FUNCTION})
         return True

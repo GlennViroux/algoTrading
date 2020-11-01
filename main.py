@@ -20,6 +20,7 @@ backtesting_parser=reqparse.RequestParser()
 backtesting_parser.add_argument("command",required=True,type=str)
 backtesting_parser.add_argument("days",type=int)
 backtesting_parser.add_argument("number",type=int)
+backtesting_parser.add_argument("sell_criterium",type=str,choices=('EMA','price'))
 
 
 config_parser=reqparse.RequestParser()
@@ -42,6 +43,7 @@ class BackTesting(Resource):
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
         filename=os.path.basename(plotpath)
+        print("GLENNY filename: ",filename)
         return send_from_directory("./output/plots/back_plots/",filename,attachment_filename=filename)
 
     def post(self):
@@ -58,7 +60,8 @@ class BackTesting(Resource):
         elif command.lower()=="launchbacktesting":
             days = args['days'] if args['days'] else 42
             number = args['number'] if args['number'] else 1
-            backtesting_thread = threading.Thread(target=main_backtesting,name='main_backtesting',kwargs={'days':days,'number':number})
+            sell_criterium = args['sell_criterium'] if args['sell_criterium'] else 'EMA'
+            backtesting_thread = threading.Thread(target=main_backtesting,name='main_backtesting',kwargs={'days':days,'number':number,'sell_criterium':sell_criterium})
             backtesting_thread.start()
             return "All good!",200
         else:

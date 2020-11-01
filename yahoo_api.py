@@ -42,9 +42,9 @@ class YahooAPI:
         if logger:
             logger.debug("Ticker: {}. Start unix: {}, end unix: {}".format(ticker,start_unix,end_unix),extra={'function':FUNCTION})
 
-        #print(url+"?"+"symbol="+ticker+"&"+"period1="+str(start_unix)+"&"+"period2="+str(end_unix)+"&"+"interval="+interval+"&"+"includePrePost="+"true")
+        #print(url+"?"+"symbol="+ticker+"&"+"period1="+str(start_unix)+"&"+"period2="+str(end_unix)+"&"+"interval="+interval+"&"+"includePrePost="+"false")
         try:
-            req=requests.get(url,params={'symbol':ticker,'period1':start_unix,'period2':end_unix,'interval':interval,'includePrePost':'true'})
+            req=requests.get(url,params={'symbol':ticker,'period1':start_unix,'period2':end_unix,'interval':interval,'includePrePost':'false'})
         except:
             if logger:
                 logger.error("Ticker: {}. Error occured while performing request to yahoo API.".format(ticker),extra={'function':FUNCTION})
