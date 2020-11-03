@@ -38,7 +38,7 @@ class BackTesting(Stocks):
             start = datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
         self.start = start
 
-        self.ip = "192.168.0.14"
+        self.ip = "192.168.0.13"
         self.M = 500
         self.Pavg = 20
         
@@ -64,8 +64,8 @@ class BackTesting(Stocks):
             'number_of_EMA_crossings','support_level','sell_criterium','drop_buying',
             'rel_max_drop_buying','max_drop_buying']
 
-        self.csv_file = "./output/backtesting/backtesting_cumulative.csv"
-        self.callsYQL_file = "./output/backtesting/calls_yql.json"
+        self.csv_file = "./backtesting/backtesting_cumulative.csv"
+        self.callsYQL_file = "./backtesting/calls_yql.json"
 
     def append_result(  
         self,
@@ -110,7 +110,7 @@ class BackTesting(Stocks):
         if isinstance(sold,str):
             sold=None
 
-        self.plot_stock(stock,df,"./output/plots/back_plots/",self.logger,start=start_date,bought=bought,sold=sold,support_level=support_level_start)
+        self.plot_stock(stock,df,"./backtesting/back_plots/",self.logger,start=start_date,bought=bought,sold=sold,support_level=support_level_start)
 
     def get_df_bought(self,df):
         # cross -1 means smallEMA goes under bigEMA
@@ -312,7 +312,7 @@ class BackTesting(Stocks):
 
         spreadsheet = client.open('algoTradingBacktesting')
 
-        with open('./output/backtesting/backtesting_cumulative.csv', 'r') as file_obj:
+        with open('./backtesting/backtesting_cumulative.csv', 'r') as file_obj:
             content = file_obj.read()
             client.import_csv(spreadsheet.id, data=content)
 
@@ -326,7 +326,7 @@ class BackTesting(Stocks):
 
         spreadsheet = client.open('algoTradingBacktesting')
 
-        with open('./output/backtesting/backtesting_cumulative.csv', 'r') as file_obj:
+        with open('./backtesting/backtesting_cumulative.csv', 'r') as file_obj:
             content = file_obj.read()
             client.import_csv(spreadsheet.id, data=content)
 

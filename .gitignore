@@ -6,3 +6,4 @@ __pycache__
 config/client_secret.json
 config/latest_state.json
 GLENNY_LOG.txt
+*backtesting*

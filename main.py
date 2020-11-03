@@ -35,7 +35,7 @@ start_time=time.time()
 class BackTesting(Resource):
     def get(self,ticker):
         if ticker.lower()=="yql_calls":
-            yql_calls = utils.read_json_data('./output/backtesting/calls_yql.json')
+            yql_calls = utils.read_json_data('./backtesting/calls_yql.json')
             if not yql_calls:
                 yql_calls = {'hourly_calls':0,'daily_calls':0,'total_calls':0}
             return make_response(jsonify(hourly_calls=yql_calls['hourly_calls'],daily_calls=yql_calls['daily_calls'],total_calls=yql_calls['total_calls']),200)
@@ -43,8 +43,7 @@ class BackTesting(Resource):
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
         filename=os.path.basename(plotpath)
-        print("GLENNY filename: ",filename)
-        return send_from_directory("./output/plots/back_plots/",filename,attachment_filename=filename)
+        return send_from_directory("./backtesting/back_plots/",filename,attachment_filename=filename)
 
     def post(self):
         msg = 'All good!'
@@ -52,9 +51,9 @@ class BackTesting(Resource):
 
         command = args['command']
         if command.lower()=="cleanbacktesting":
-            os.system("rm ./output/plots/back_plots/*png")
-            os.system("rm ./output/backtesting/backtesting_cumulative.csv")
-            os.system("touch ./output/backtesting/backtesting_cumulative.csv")
+            os.system("rm ./backtesting/back_plots/*png")
+            os.system("rm ./backtesting/backtesting_cumulative.csv")
+            os.system("touch ./backtesting/backtesting_cumulative.csv")
             from backtesting import BackTesting
             BackTesting.refresh_drive()
         elif command.lower()=="launchbacktesting":
@@ -73,9 +72,9 @@ class BackTesting(Resource):
 class Retrieve(Resource):
     def get(self,data_id):
         if data_id=="backtesting":
-            if not os.path.isfile("./output/backtesting/backtesting_cumulative.csv"):
+            if not os.path.isfile("./backtesting/backtesting_cumulative.csv"):
                 abort(404,message="No cumulative backtesting CSV exists :(")
-            return send_from_directory("./output/backtesting/","backtesting_cumulative.csv",attachment_filename="backtesting_cumulative.csv")
+            return send_from_directory("./backtesting/","backtesting_cumulative.csv",attachment_filename="backtesting_cumulative.csv")
 
         datapath=utils.get_latest_log(data_id.upper())
         if datapath==None:

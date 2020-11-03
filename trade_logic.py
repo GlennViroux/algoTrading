@@ -688,7 +688,7 @@ class Stocks(YahooAPI):
         nasdaq_stocks = list(df.Symbol)
         random.shuffle(nasdaq_stocks)
 
-        logger.debug("{} interesting stocks found".format(len(stocks)), extra={'function': FUNCTION})
+        logger.debug("{} interesting NASDAQ stocks found".format(len(nasdaq_stocks)), extra={'function': FUNCTION})
 
         self.interesting_stocks = nasdaq_stocks
 

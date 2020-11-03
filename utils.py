@@ -256,7 +256,7 @@ def get_latest_log(keyword,basepath="./output/",logger=None):
     return max(list_of_files, key=os.path.getctime)
 
 def get_back_plot(ticker):
-    list_of_files=glob.glob('./output/plots/back_plots/*{}.png'.format(ticker.upper()))
+    list_of_files=glob.glob('./backtesting/back_plots/*{}.png'.format(ticker.upper()))
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)
