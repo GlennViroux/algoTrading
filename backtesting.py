@@ -14,7 +14,10 @@ import utils
 import os
 
 class BackTesting(Stocks):
-    ACCEPT_PARAMS = ["derivative_factor","surface_factor","EMA_surface_plus","EMA_surface_min","number_of_EMA_crossings","drop_period","latest_drop","support_level"]
+    ACCEPT_PARAMS = [
+        "derivative_factor","surface_factor","EMA_surface_plus","EMA_surface_min",
+        "number_of_EMA_crossings","drop_period","latest_drop","support_level"]
+
     def __init__(self,start,number_of_stocks,sell_criterium,stocks=[]):
         if not stocks:
             stocks = []
@@ -30,8 +33,6 @@ class BackTesting(Stocks):
             not_interesting_stocks=[],
             yahoo_calls={},
             results={})
-
-        print("GLENNY monitored stocks: ",len(self.monitored_stocks))
 
         if isinstance(start,str):
             start = datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
@@ -51,16 +52,17 @@ class BackTesting(Stocks):
         self.initialize_stocks(start,self.logger,self.conf,number_of_stocks,update_nasdaq_file=True,stocks=stocks)
 
         self.results = {"stock":[],"bought":[],"sold":[],"price_bought":[],"price_sold":[],
-                        "number":[],"result":[],"derivative_factor":[],"surface_factor":[],
-                        "EMA_surface_plus":[],"EMA_surface_min":[],"number_of_EMA_crossings":[],
-                        "drop_period":[],"latest_drop":[],"support_level":[],"drop_buying":[],
-                        "support_level_start":[],"start_date":[],"comment":[],"timestamp":[],
-                        "sell_criterium":[]}
+                        "number":[],"result":[],"drop_buying":[],"support_level_start":[],
+                        "start_date":[],"comment":[],"timestamp":[],"sell_criterium":[],
+                        'rel_max_drop_buying':[],'max_drop_buying':[]}
+        for param in self.ACCEPT_PARAMS:
+            self.results[param]=[]
 
-        self.columns = ['timestamp','stock','result','comment','start_date','bought','sold','price_bought','price_sold','number',
-                    'surface_factor','EMA_surface_plus','EMA_surface_min',
-                    'number_of_EMA_crossings','latest_drop','support_level','sell_criterium',
-                    'drop_buying']
+        self.columns = [
+            'timestamp','stock','result','comment','start_date','bought','sold','price_bought',
+            'price_sold','number','surface_factor','EMA_surface_plus','EMA_surface_min',
+            'number_of_EMA_crossings','support_level','sell_criterium','drop_buying',
+            'rel_max_drop_buying','max_drop_buying']
 
         self.csv_file = "./output/backtesting/backtesting_cumulative.csv"
         self.callsYQL_file = "./output/backtesting/calls_yql.json"
@@ -77,7 +79,7 @@ class BackTesting(Stocks):
         price_sold,
         number,
         result,
-        drop_buying,
+        params,
         support_level_start,
         comment):
         '''
@@ -94,7 +96,9 @@ class BackTesting(Stocks):
         self.results["price_sold"].append(price_sold)
         self.results["number"].append(number)
         self.results["result"].append(result)
-        self.results["drop_buying"].append(drop_buying)
+        self.results["drop_buying"].append(params.latest_drop)
+        self.results["rel_max_drop_buying"].append(params.rel_max_drop)
+        self.results["max_drop_buying"].append(params.max_drop)
         self.results["support_level_start"].append(support_level_start)
         self.results["comment"].append(comment)
         self.results["sell_criterium"].append(self.sell_criterium)
@@ -144,6 +148,9 @@ class BackTesting(Stocks):
         else:
             raise Exception("No valid sell criterium ({}) has been provided. Valid options are EMA or price.".format(self.sell_criterium))
 
+        print("GLENNY")
+        print(df_sold)
+        
         df_support = df[(df.timestamps>=bought) & (df.close<=support_level)]
         if not df_support.empty:
             support_crossing = df_support.iloc[0].timestamps
@@ -199,6 +206,9 @@ class BackTesting(Stocks):
             return False
 
         df = self.get_df_bought(df)
+        
+        # get accept parameters
+        params = AcceptParameters(stock,self.current_status[stock]['exchange'],df,self.conf)
 
         buy_response = self.get_buy_info(df)
         if not buy_response:
@@ -213,7 +223,7 @@ class BackTesting(Stocks):
                 price_sold=0,
                 number=0,
                 result=0,
-                drop_buying=0,
+                params=params,
                 support_level_start=0,
                 comment="Never bought")
             return True
@@ -221,13 +231,10 @@ class BackTesting(Stocks):
         Pi,bought = buy_response
         N = round(min(self.M/Pi,self.M/self.Pavg))
 
-        # get accept parameters
-        df_data = df[df.timestamps<bought]
-        params = AcceptParameters(stock,self.current_status[stock]['exchange'],df_data,self.conf)
-        drop_buying = round(params.get_latest_drop(bought,self.logger),3)
+        if not params.get_drop(bought,self.logger):
+            return False
         
         support_level_start = self.current_status[stock]["support_level"]
-        print("GLENNY support level start: ",support_level_start)
         support_response = self.check_if_sold_by_support_level(support_level_start,bought,df)
         if support_response:
             Pe,support_crossing = support_response
@@ -242,7 +249,7 @@ class BackTesting(Stocks):
                 price_sold=Pe,
                 number=N,
                 result=round(N*(Pe-Pi),2),
-                drop_buying=drop_buying,
+                params=params,
                 support_level_start=support_level_start,
                 comment="Bought and sold because of support level")
             return True
@@ -261,7 +268,7 @@ class BackTesting(Stocks):
                 price_sold=Pe,
                 number=N,
                 result=round(N*(Pe-Pi),2),
-                drop_buying=drop_buying,
+                params=params,
                 support_level_start=support_level_start,
                 comment="Bought but never sold")
             return True
@@ -279,7 +286,7 @@ class BackTesting(Stocks):
             price_sold=Pe,
             number=N,
             result=W,
-            drop_buying=drop_buying,
+            params=params,
             support_level_start=support_level_start,
             comment="Bought and sold")
 

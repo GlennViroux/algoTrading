@@ -46,6 +46,8 @@ class AcceptParameters:
         self.number_of_EMA_crossings = "N/A"
         self.latest_drop = "N/A"
         self.support_level = "N/A"
+        self.rel_max_drop = "N/A"
+        self.max_drop = "N/A"
         self.drop_period = config_params['trade_logic']['drop_period']
 
         timestamps_aware = self.df_data['timestamps'].map(lambda timestamp: timestamp.replace(tzinfo=pytz.timezone("Etc/GMT+4")))
@@ -118,8 +120,8 @@ class AcceptParameters:
 
         return round(Aplus,3),round(Amin,3)
 
-    def get_latest_drop(self, date, logger):
-        FUNCTION='get_latest_drop'
+    def get_drop(self, date, logger):
+        FUNCTION='get_drop'
         '''
         Gets the latest drop of the price of the stock, in %/h
         '''
@@ -136,13 +138,16 @@ class AcceptParameters:
 
         df_rel = df.tail(data_points)
 
-        #print(df_rel)
-        #print(data_points)
-
         if df_rel.empty:
             logger.info("Empty DataFrame was obtained with {} latest datapoints (data sampling: {} period: {})".format(data_points,data_sampling,period),extra={'function':FUNCTION})
             return False
 
+        # Get max drop difference
+        closes_diffs = df_rel.close.diff()
+        self.rel_max_drop = round(closes_diffs.min()/df_rel.close.mean()*100,2)
+        self.max_drop = round(closes_diffs.min(),3)
+
+        # Get relative drop 
         max_val = df_rel.close.max()
         min_val = df_rel.close.min()
         rel_diff_perc = (min_val-max_val)/(min_val+max_val)*2*100
@@ -165,13 +170,13 @@ class AcceptParameters:
         #print("Factor: ",factor)
         result = rel_diff_perc/factor
         #print("Result: ",result)
-        self.latest_drop = result
+        self.latest_drop = round(result,2)
 
         return result
 
     def accept_latest_drop(self, date, logger):
         FUNCTION = 'accept_latest_drop'
-        latest_drop = self.get_latest_drop(date,logger=logger)
+        latest_drop = self.get_drop(date,logger=logger)
         if not latest_drop:
             logger.debug("Ticker: {}. Latest drop could not be calculated".format(self.stock),extra={'function':FUNCTION})
             return False
@@ -594,7 +599,7 @@ class Stocks(YahooAPI):
 
         params = AcceptParameters(ticker, exchange, df_data, config_params)
         params.get_support_level(date)
-        params.get_latest_drop(date,logger)
+        params.get_drop(date,logger)
 
         if not params.accept_stock(date,logger):
             self.not_interesting_stocks.append(ticker)
