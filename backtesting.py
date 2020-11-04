@@ -405,7 +405,7 @@ class BackTesting(Stocks):
 
     def plot_statistics(self,what,df,name,conf_limit,upper_threshold):
         fig,ax = plt.subplots()
-        fig.suptitle("Statistics for {}".format(name),fontsize='xx-large')
+        
 
         cols = df.columns
         if conf_limit:
@@ -428,12 +428,15 @@ class BackTesting(Stocks):
 
 
         ax.scatter(df[cols[0]],df[cols[1]])
+        
         if what=='total':
-            ylabel = "Final result [$]"
+            title = f"Total statistics for {name}"
+            ylabel = "Total result [$]"
             plot_dir = Path(self.stats_plot_dir) / 'total'
             hyperlink = "=HYPERLINK(\"http://{}:5050/backtesting/stats-total-{}\",\"{}\")".format(self.ip,name,"plot")
             self.stats["total_result_plot"].append(hyperlink)
         elif what=='scatter':
+            title = f"Individual statistics for {name}"
             ylabel = "Individual results [$]"
             plot_dir = Path(self.stats_plot_dir) / 'individual'
             hyperlink = "=HYPERLINK(\"http://{}:5050/backtesting/stats-individual-{}\",\"{}\")".format(self.ip,name,"plot")
@@ -441,6 +444,7 @@ class BackTesting(Stocks):
         else:
             return False
 
+        fig.suptitle(title,fontsize='xx-large')
         ax.set_ylabel(ylabel)
         ax.set_xlabel("{} threshold".format(name))
         ax.grid()

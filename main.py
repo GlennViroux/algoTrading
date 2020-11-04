@@ -40,11 +40,13 @@ class BackTesting(Resource):
                 yql_calls = {'hourly_calls':0,'daily_calls':0,'total_calls':0}
             return make_response(jsonify(hourly_calls=yql_calls['hourly_calls'],daily_calls=yql_calls['daily_calls'],total_calls=yql_calls['total_calls']),200)
         elif ticker.split("-")[0]=="stats":
-            plotpath=utils.get_back_stat_plot(ticker.split("-")[1],ticker.split("-")[2])
+            what = ticker.split("-")[1]
+            param = ticker.split("-")[2]
+            plotpath=utils.get_back_stat_plot(param,what)
             if plotpath==None:
                 abort(404,message="Plot for {} does not exist.".format(ticker))
             filename=os.path.basename(plotpath)
-            return send_from_directory("./backtesting/stats_plots/",filename,attachment_filename=filename)
+            return send_from_directory(f"./backtesting/stats_plots/{what}/",filename,attachment_filename=filename)
 
 
         plotpath=utils.get_back_plot(ticker)
