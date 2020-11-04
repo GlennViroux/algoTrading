@@ -261,6 +261,12 @@ def get_back_plot(ticker):
         return None
     return max(list_of_files, key=os.path.getctime)
 
+def get_back_stat_plot(param,what):
+    list_of_files=glob.glob(f'./backtesting/stats_plots/{what}/*{param}.png')
+    if not list_of_files:
+        return None
+    return max(list_of_files, key=os.path.getctime)
+
 def read_config(config_file,logger=None):
     #FUNCTION='read_config'
     json_data=read_json_data(config_file,logger=logger)
@@ -287,11 +293,11 @@ def read_config(config_file,logger=None):
     result['trade_logic']['number_of_big_EMAs_threshold']=int(json_data['trade_logic']['number_of_big_EMAs_threshold'])
     result['trade_logic']['big_EMA_derivative_threshold']=float(json_data['trade_logic']['big_EMA_derivative_threshold'])
     result['trade_logic']['surface_indicator_threshold']=float(json_data['trade_logic']['surface_indicator_threshold'])
-    result['trade_logic']['EMA_surface_plus_threshold']=float(json_data['trade_logic']['EMA_surface_plus_threshold'])
-    result['trade_logic']['EMA_surface_min_threshold']=float(json_data['trade_logic']['EMA_surface_min_threshold'])
+    result['trade_logic']['EMA_surface_plus']=float(json_data['trade_logic']['EMA_surface_plus'])
+    result['trade_logic']['EMA_surface_min']=float(json_data['trade_logic']['EMA_surface_min'])
     result['trade_logic']['number_of_EMA_crossings']=int(json_data['trade_logic']['number_of_EMA_crossings'])
     result['trade_logic']['drop_period']=int(json_data['trade_logic']['drop_period'])
-    result['trade_logic']['drop_threshold']=int(json_data['trade_logic']['drop_threshold'])
+    result['trade_logic']['drop_buying']=int(json_data['trade_logic']['drop_buying'])
     result['trade_logic']['support_days']=int(json_data['trade_logic']['support_days'])
     result['trade_logic']['support_percentage']=int(json_data['trade_logic']['support_percentage'])
     

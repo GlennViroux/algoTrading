@@ -27,8 +27,12 @@ def main(days=None,number=None,sell_criterium=None,stocks=None):
     b = BackTesting(start,number,sell_criterium,stocks)
     for stock in b.monitored_stocks:
         b.calculate_result(stock)
-    b.upload_to_drive()
+    
+    b.append_csv()
+    b.upload_results()
     b.update_yql_calls_file()
+    
+    b.get_all_stats()
 
 
 if __name__=='__main__':

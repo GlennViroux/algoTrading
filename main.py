@@ -39,6 +39,14 @@ class BackTesting(Resource):
             if not yql_calls:
                 yql_calls = {'hourly_calls':0,'daily_calls':0,'total_calls':0}
             return make_response(jsonify(hourly_calls=yql_calls['hourly_calls'],daily_calls=yql_calls['daily_calls'],total_calls=yql_calls['total_calls']),200)
+        elif ticker.split("-")[0]=="stats":
+            plotpath=utils.get_back_stat_plot(ticker.split("-")[1],ticker.split("-")[2])
+            if plotpath==None:
+                abort(404,message="Plot for {} does not exist.".format(ticker))
+            filename=os.path.basename(plotpath)
+            return send_from_directory("./backtesting/stats_plots/",filename,attachment_filename=filename)
+
+
         plotpath=utils.get_back_plot(ticker)
         if plotpath==None:
             abort(404,message="Plot for {} does not exist.".format(ticker.upper()))
@@ -51,11 +59,14 @@ class BackTesting(Resource):
 
         command = args['command']
         if command.lower()=="cleanbacktesting":
-            os.system("rm ./backtesting/back_plots/*png")
+            os.system("rm -rf ./backtesting/*plots*")
+            os.system("rm ./backtesting/backtesting_stats.csv")
+            os.system("touch ./backtesting/backtesting_stats.csv")
             os.system("rm ./backtesting/backtesting_cumulative.csv")
             os.system("touch ./backtesting/backtesting_cumulative.csv")
             from backtesting import BackTesting
-            BackTesting.refresh_drive()
+            BackTesting.upload_results()
+            BackTesting.upload_stats()
         elif command.lower()=="launchbacktesting":
             days = args['days'] if args['days'] else 42
             number = args['number'] if args['number'] else 1
@@ -63,6 +74,10 @@ class BackTesting(Resource):
             backtesting_thread = threading.Thread(target=main_backtesting,name='main_backtesting',kwargs={'days':days,'number':number,'sell_criterium':sell_criterium})
             backtesting_thread.start()
             return "All good!",200
+        elif command.lower()=="refreshbacktesting":
+            from backtesting import BackTesting
+            BackTesting.upload_results()
+            BackTesting.upload_stats()
         else:
             abort(404,message='A not valid command ({}) was provided.'.format(command))
 

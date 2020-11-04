@@ -18,6 +18,7 @@ import matplotlib.dates as mdates
 import shutil
 import urllib.request as request
 from contextlib import closing
+from pathlib import PurePath
 
 def get_latest_prices(stock, data):
     # FUNCTION='get_latest_values'
@@ -180,8 +181,8 @@ class AcceptParameters:
         if not latest_drop:
             logger.debug("Ticker: {}. Latest drop could not be calculated".format(self.stock),extra={'function':FUNCTION})
             return False
-        if latest_drop < self.config_params['trade_logic']['drop_threshold']:
-            logger.debug("Ticker: {}. Latest drop ({}%/h) is greater than the configured threshold ({}%/h)".format(self.stock, latest_drop, self.config_params['trade_logic']['drop_threshold']), extra={'function': FUNCTION})
+        if latest_drop < self.config_params['trade_logic']['drop_buying']:
+            logger.debug("Ticker: {}. Latest drop ({}%/h) is greater than the configured threshold ({}%/h)".format(self.stock, latest_drop, self.config_params['trade_logic']['drop_buying']), extra={'function': FUNCTION})
             return False
 
         return True
@@ -243,13 +244,13 @@ class AcceptParameters:
         self.EMA_surface_plus = areas[0]
         self.EMA_surface_min = areas[1]
 
-        if self.config_params['trade_logic']['EMA_surface_plus_threshold'] < self.EMA_surface_plus:
+        if self.config_params['trade_logic']['EMA_surface_plus'] < self.EMA_surface_plus:
             logger.debug("Ticker: {}. EMA surface plus ({}) if higher than the threshold ({})".format(
-                self.stock, self.EMA_surface_plus, self.config_params['trade_logic']['EMA_surface_plus_threshold']), extra={'function': FUNCTION})
+                self.stock, self.EMA_surface_plus, self.config_params['trade_logic']['EMA_surface_plus']), extra={'function': FUNCTION})
             result = False
 
-        if self.config_params['trade_logic']['EMA_surface_min_threshold'] > self.EMA_surface_min:
-            logger.debug("Ticker: {}. EMA surface min ({}) if lower than the threshold ({})".format(self.stock, self.EMA_surface_min, self.config_params['trade_logic']['EMA_surface_min_threshold']), extra={'function': FUNCTION})
+        if self.config_params['trade_logic']['EMA_surface_min'] > self.EMA_surface_min:
+            logger.debug("Ticker: {}. EMA surface min ({}) if lower than the threshold ({})".format(self.stock, self.EMA_surface_min, self.config_params['trade_logic']['EMA_surface_min']), extra={'function': FUNCTION})
             result = False
 
         number_of_crossings = self.get_number_EMA_crossings(date,logger=logger)
@@ -641,7 +642,7 @@ class Stocks(YahooAPI):
         '''
         Check if we should add a new stock to monitor
         '''
-        if not number_of_stocks:
+        if number_of_stocks==None:
             number_of_stocks = config_params['main']['initial_number_of_stocks']
 
         if stocks and isinstance(stocks,list):
@@ -653,7 +654,6 @@ class Stocks(YahooAPI):
             while len(self.monitored_stocks) < number_of_stocks:
                 ticker = self.get_new_interesting_stock(logger)
                 self.check_stock(ticker,date,config_params,logger)
-
 
 
     def initialize_stocks(
@@ -671,7 +671,7 @@ class Stocks(YahooAPI):
         '''
         logger.debug("Getting stocks to monitor", extra={'function': FUNCTION})
 
-        if not number_of_stocks:
+        if number_of_stocks==None:
             number_of_stocks = config_params['main']['initial_number_of_stocks']
 
         # TODO this is only for NASDAQ!
@@ -1031,7 +1031,10 @@ class Stocks(YahooAPI):
         fig.subplots_adjust(wspace=0.0001)
         fig.suptitle("Stock data for {}".format(stock),fontsize='xx-large')
 
-        name=output_dir_plots+"{}_{}.png".format(utils.date_now_filename(), stock)
+        if isinstance(output_dir_plots,PurePath):
+            name = output_dir_plots / "{}_{}.png".format(utils.date_now_filename(), stock)
+        else:
+            name = output_dir_plots + "{}_{}.png".format(utils.date_now_filename(), stock)
         logger.debug("Creating plot {}".format(name),extra={'function':FUNCTION})
         plt.savefig(name,bbox_inches='tight')
         plt.close()

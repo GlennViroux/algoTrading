@@ -7,7 +7,8 @@ from yahoo_api import YahooAPI
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime,timedelta
-from collections import namedtuple
+from pathlib import Path
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import utils
@@ -38,7 +39,7 @@ class BackTesting(Stocks):
             start = datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
         self.start = start
 
-        self.ip = "192.168.0.13"
+        self.ip = "192.168.0.14"
         self.M = 500
         self.Pavg = 20
         
@@ -64,7 +65,13 @@ class BackTesting(Stocks):
             'number_of_EMA_crossings','support_level','sell_criterium','drop_buying',
             'rel_max_drop_buying','max_drop_buying']
 
+        self.stats = {"param":[],"total_result_plot":[],"individual_result_plot":[]}
+        self.columns_stats = ['param','total_result_plot','individual_result_plot']
+
         self.csv_file = "./backtesting/backtesting_cumulative.csv"
+        self.csv_file_stats = "./backtesting/backtesting_stats.csv"
+        self.plot_dir = "./backtesting/back_plots/"
+        self.stats_plot_dir = "./backtesting/stats_plots/"
         self.callsYQL_file = "./backtesting/calls_yql.json"
 
     def append_result(  
@@ -110,7 +117,9 @@ class BackTesting(Stocks):
         if isinstance(sold,str):
             sold=None
 
-        self.plot_stock(stock,df,"./backtesting/back_plots/",self.logger,start=start_date,bought=bought,sold=sold,support_level=support_level_start)
+        plot_dir = Path(self.plot_dir)
+        plot_dir.mkdir(parents=True,exist_ok=True)
+        self.plot_stock(stock,df,plot_dir,self.logger,start=start_date,bought=bought,sold=sold,support_level=support_level_start)
 
     def get_df_bought(self,df):
         # cross -1 means smallEMA goes under bigEMA
@@ -147,9 +156,6 @@ class BackTesting(Stocks):
             df_sold = df[(df.timestamps>bought) & (df.timestamps>=EMA_cross_timestamp) & (df[self.cross]==1)]
         else:
             raise Exception("No valid sell criterium ({}) has been provided. Valid options are EMA or price.".format(self.sell_criterium))
-
-        print("GLENNY")
-        print(df_sold)
         
         df_support = df[(df.timestamps>=bought) & (df.close<=support_level)]
         if not df_support.empty:
@@ -296,28 +302,19 @@ class BackTesting(Stocks):
     def update_yql_calls_file(self):
         utils.write_json(self.yahoo_calls,self.callsYQL_file)
 
-    def append_csv(self):
-        header = not os.path.isfile(self.csv_file) or os.stat(self.csv_file).st_size==0
-        df = pd.DataFrame.from_dict(self.results) 
-        df.to_csv(self.csv_file,mode='a',columns=self.columns,header=header,index=False)
+    def append_csv(self,myfile=None,df=None,columns=None):
+        if not myfile:
+            myfile = self.csv_file
+        if not isinstance(df,pd.DataFrame) or df.empty:
+            df = pd.DataFrame.from_dict(self.results)
+        if not columns:
+            columns = self.columns
 
-    def upload_to_drive(self):
-        self.append_csv()
-
-        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
-         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-
-        credentials = ServiceAccountCredentials.from_json_keyfile_name('./config/client_secret.json', scope)
-        client = gspread.authorize(credentials)
-
-        spreadsheet = client.open('algoTradingBacktesting')
-
-        with open('./backtesting/backtesting_cumulative.csv', 'r') as file_obj:
-            content = file_obj.read()
-            client.import_csv(spreadsheet.id, data=content)
+        header = not os.path.isfile(myfile) or os.stat(myfile).st_size==0
+        df.to_csv(myfile,mode='a',columns=columns,header=header,index=False)
 
     @classmethod
-    def refresh_drive(cls):
+    def upload_results(cls):
         scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
          "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
 
@@ -326,8 +323,139 @@ class BackTesting(Stocks):
 
         spreadsheet = client.open('algoTradingBacktesting')
 
-        with open('./backtesting/backtesting_cumulative.csv', 'r') as file_obj:
+        if not Path("./backtesting/backtesting_cumulative.csv").is_file():
+            return False
+
+        with open("./backtesting/backtesting_cumulative.csv", 'r') as file_obj:
             content = file_obj.read()
             client.import_csv(spreadsheet.id, data=content)
+
+        return True
+
+    @classmethod
+    def upload_stats(cls):
+        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+
+        credentials = ServiceAccountCredentials.from_json_keyfile_name('./config/client_secret.json', scope)
+        client = gspread.authorize(credentials)
+
+        spreadsheet = client.open('algoTradingStats')
+
+        if not Path("./backtesting/backtesting_stats.csv").is_file():
+            return False
+
+        with open("./backtesting/backtesting_stats.csv", 'r') as file_obj:
+            content = file_obj.read()
+            client.import_csv(spreadsheet.id, data=content)
+
+        return True
+
+    def get_all_stats(self):
+        '''
+        Get statisticks about all data available in the CSV file.
+        '''
+        params = {
+            'drop_buying':False,
+            'EMA_surface_plus':True,
+            'EMA_surface_min':False,
+            'rel_max_drop_buying':False,
+            'max_drop_buying':False
+            }
+
+        for param in params:
+            if param in self.conf['trade_logic']:
+                conf_limit = self.conf['trade_logic'][param]
+            else:
+                conf_limit = None
+
+            self.get_stats_param(param,conf_limit,params[param])
+        
+        df = pd.DataFrame.from_dict(self.stats)
+        
+        self.append_csv(self.csv_file_stats,df,self.columns_stats)
+        self.upload_stats()
+
+    def get_stats_param(self,name,conf_limit,upper_threshold=False):
+        csv_file = Path(self.csv_file)
+        if not csv_file.is_file():
+            return False
+
+        df = pd.read_csv(csv_file)
+
+        if not name in df.columns:
+            return False
+            
+        param_min = df[name].min()
+        param_max = df[name].max()
+        points = np.linspace(param_min,param_max,num=50)
+
+        total_results = []
+        for threshold in points:
+            if upper_threshold:
+                total_results.append(df[df[name] <= threshold].result.sum())
+            else:
+                total_results.append(df[df[name] >= threshold].result.sum())
+        
+        df_total_result = pd.DataFrame(list(zip(points,total_results)),columns=[name,'result'])
+        self.plot_statistics('total',df_total_result,name,conf_limit,upper_threshold)
+
+        df_scatter_results = df[[name,'result']]
+        self.plot_statistics('scatter',df_scatter_results,name,conf_limit,upper_threshold)
+
+    def plot_statistics(self,what,df,name,conf_limit,upper_threshold):
+        fig,ax = plt.subplots()
+        fig.suptitle("Statistics for {}".format(name),fontsize='xx-large')
+
+        cols = df.columns
+        if conf_limit:
+            lower = df[cols[0]].iloc[0]
+            upper = df[cols[0]].iloc[-1]
+            if not upper_threshold:
+                if conf_limit>lower:
+                    upper_plot = min(conf_limit,upper)
+                    ax.axvspan(xmin=lower,xmax=upper_plot,alpha=0.3,facecolor='tab:red')
+                if conf_limit<upper:
+                    lower_plot = max(conf_limit,lower)
+                    ax.axvspan(xmin=lower_plot,xmax=upper,alpha=0.3,facecolor='tab:green')
+            else:
+                if conf_limit>lower:
+                    upper_plot = min(conf_limit,upper)
+                    ax.axvspan(xmin=lower,xmax=upper_plot,alpha=0.3,facecolor='tab:green')
+                if conf_limit<upper:
+                    lower_plot = max(conf_limit,lower)
+                    ax.axvspan(xmin=lower_plot,xmax=upper,alpha=0.3,facecolor='tab:red')
+
+
+        ax.scatter(df[cols[0]],df[cols[1]])
+        if what=='total':
+            ylabel = "Final result [$]"
+            plot_dir = Path(self.stats_plot_dir) / 'total'
+            hyperlink = "=HYPERLINK(\"http://{}:5050/backtesting/stats-total-{}\",\"{}\")".format(self.ip,name,"plot")
+            self.stats["total_result_plot"].append(hyperlink)
+        elif what=='scatter':
+            ylabel = "Individual results [$]"
+            plot_dir = Path(self.stats_plot_dir) / 'individual'
+            hyperlink = "=HYPERLINK(\"http://{}:5050/backtesting/stats-individual-{}\",\"{}\")".format(self.ip,name,"plot")
+            self.stats["individual_result_plot"].append(hyperlink)
+        else:
+            return False
+
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel("{} threshold".format(name))
+        ax.grid()
+
+        plot_dir.mkdir(parents=True,exist_ok=True)
+        fig.savefig(plot_dir / f"{name}.png")
+        del fig
+        plt.close()
+
+        
+        if not name in self.stats["param"]:
+            self.stats["param"].append(name)
+        
+        
+
+
 
 

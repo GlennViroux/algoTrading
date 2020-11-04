@@ -1,16 +1,10 @@
-class First:
-    def __init__(self):
-        print("first")
 
-class Second:
-    def __init__(self):
-        print("second")
+from datetime import datetime
+from backtesting import BackTesting
 
-class Third(First, Second):
-    def __init__(self):
-        First.__init__(self)
-        Second.__init__(self)
-        print("third")
+start = datetime.strptime("2020/10/01-00:00:00",'%Y/%m/%d-%H:%M:%S')
+b = BackTesting(start,0,"price")
 
-
-t = Third()
+b.get_stats_param('drop_buying',-3)
+b.get_stats_param('EMA_surface_min',-50)
+b.get_stats_param('EMA_surface_plus',50,upper_threshold=True)
