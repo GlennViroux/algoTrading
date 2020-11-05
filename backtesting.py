@@ -39,7 +39,7 @@ class BackTesting(Stocks):
             start = datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
         self.start = start
 
-        self.ip = "192.168.0.14"
+        self.ip = "192.168.0.13"
         self.M = 500
         self.Pavg = 20
         
