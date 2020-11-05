@@ -475,7 +475,6 @@ Y|APD|Air Products and Chemicals, Inc. Common Stock|N| |N|100|N||APD|APD|N
 Y|APDN|Applied DNA Sciences, Inc. - Common Stock|Q|S|N|100|N|N||APDN|N
 Y|APEI|American Public Education, Inc. - Common Stock|Q|Q|N|100|N|N||APEI|N
 Y|APEN|Apollo Endosurgery, Inc. - Common Stock|Q|G|N|100|N|N||APEN|N
-Y|APEX|Apex Global Brands Inc. - Common Stock|Q|S|N|100|N|D||APEX|N
 Y|APG|APi Group Corporation Common Stock|N| |N|100|N||APG|APG|N
 Y|APH|Amphenol Corporation Common Stock|N| |N|100|N||APH|APH|N
 Y|APHA|Aphria Inc. - Common Shares|Q|Q|N|100|N|N||APHA|N
@@ -3555,7 +3554,7 @@ Y|GL$C|Globe Life Inc. 6.125% Junior Subordinated Debentures due 2056|N| |N|100|
 Y|GLAD|Gladstone Capital Corporation - Common Stock|Q|Q|N|100|N|N||GLAD|N
 Y|GLADD|Gladstone Capital Corporation - 6.125% Notes due 2023|Q|Q|N|100|N|N||GLADD|N
 Y|GLADL|Gladstone Capital Corporation - 5.375% Notes due 2024|Q|Q|N|100|N|N||GLADL|N
-Y|GLBS|Globus Maritime Limited - Common Stock|Q|S|N|100|N|D||GLBS|N
+Y|GLBS|Globus Maritime Limited - Common Stock|Q|S|N|100|N|N||GLBS|N
 Y|GLBZ|Glen Burnie Bancorp - Common Stock|Q|S|N|100|N|N||GLBZ|N
 Y|GLCN|VanEck Vectors China Growth Leaders ETF|P| |Y|100|N||GLCN|GLCN|N
 Y|GLD|SPDR Gold Trust|P| |Y|100|N||GLD|GLD|N
@@ -4608,6 +4607,8 @@ Y|JBL|Jabil Inc. Common Stock|N| |N|100|N||JBL|JBL|N
 Y|JBLU|JetBlue Airways Corporation - Common Stock|Q|Q|N|100|N|N||JBLU|N
 Y|JBSS|John B. Sanfilippo & Son, Inc. - Common Stock|Q|Q|N|100|N|N||JBSS|N
 Y|JBT|John Bean Technologies Corporation Common Stock|N| |N|100|N||JBT|JBT|N
+Y|JCAP|Jernigan Capital, Inc. Common Stock|N| |N|100|N||JCAP|JCAP|N
+Y|JCAP$B|Jernigan Capital, Inc. 7.00% Series B Cumulative Redeemable Perpetual Preferred Stock|N| |N|100|N||JCAPpB|JCAP-B|N
 Y|JCE|Nuveen Core Equity Alpha Fund Nuveen Core Equity Alpha Fund Common Shares of Beneficial Interest|N| |N|100|N||JCE|JCE|N
 Y|JCI|Johnson Controls International plc Ordinary Share|N| |N|100|N||JCI|JCI|N
 Y|JCO|Nuveen Credit Opportunities 2022 Target Term Fund Common Shares of Beneficial Interest|N| |N|100|N||JCO|JCO|N
@@ -5885,7 +5886,7 @@ Y|NOMD|Nomad Foods Limited Ordinary Shares|N| |N|100|N||NOMD|NOMD|N
 Y|NORW|Global X MSCI Norway ETF|P| |Y|100|N||NORW|NORW|N
 Y|NOV|National Oilwell Varco, Inc. Common Stock|N| |N|100|N||NOV|NOV|N
 Y|NOVA|Sunnova Energy International Inc. Common Stock|N| |N|100|N||NOVA|NOVA|N
-Y|NOVN|Novan, Inc. - Common Stock|Q|G|N|100|N|D||NOVN|N
+Y|NOVN|Novan, Inc. - Common Stock|Q|S|N|100|N|D||NOVN|N
 Y|NOVS|Novus Capital Corporation - Common Stock|Q|S|N|100|N|N||NOVS|N
 Y|NOVSU|Novus Capital Corporation - Units|Q|S|N|100|N|N||NOVSU|N
 Y|NOVSW|Novus Capital Corporation - Warrants|Q|S|N|100|N|N||NOVSW|N
@@ -7305,7 +7306,9 @@ Y|SBE|Switchback Energy Acquisition Corporation Class A Common Stock|N| |N|100|N
 Y|SBE.U|Switchback Energy Acquisition Corporation Units|N| |N|100|N||SBE.U|SBE=|N
 Y|SBE.W|Switchback Energy Acquisition Corporation Warrant|N| |N|100|N||SBE.WS|SBE+|N
 Y|SBFG|SB Financial Group, Inc. - Common Stock|Q|S|N|100|N|N||SBFG|N
+Y|SBG|Sandbridge Acquisition Corporation Class A Common Stock|N| |N|100|N||SBG|SBG|N
 Y|SBG.U|Sandbridge Acquisition Corporation Units|N| |N|100|N||SBG.U|SBG=|N
+Y|SBG.W|Sandbridge Acquisition Corporation Warrants, each whole warrant exercisable for one share of Class A Common Stock at an exercise price of $11.50|N| |N|100|N||SBG.WS|SBG+|N
 Y|SBGI|Sinclair Broadcast Group, Inc. - Class A Common Stock|Q|Q|N|100|N|N||SBGI|N
 Y|SBH|Sally Beauty Holdings, Inc. (Name to be changed from Sally Holdings, Inc.) Common Stock|N| |N|100|N||SBH|SBH|N
 Y|SBI|Western Asset Intermediate Muni Fund Inc Common Stock|N| |N|100|N||SBI|SBI|N
@@ -7478,6 +7481,7 @@ Y|SHI|SINOPEC Shangai Petrochemical Company, Ltd. Common Stock|N| |N|100|N||SHI|
 Y|SHIP|Seanergy Maritime Holdings Corp - Common Stock|Q|S|N|100|N|D||SHIP|N
 Y|SHIPW|Seanergy Maritime Holdings Corp - Class A Warrants|Q|S|N|100|N|N||SHIPW|N
 Y|SHIPZ|Seanergy Maritime Holdings Corp - Class B Warrant|Q|S|N|100|N|N||SHIPZ|N
+Y|SHLD|VictoryShares Protect America ETF|Q|G|Y|100|N|N||SHLD|N
 Y|SHLX|Shell Midstream Partners, L.P. Common Units representing Limited Partner Interests|N| |N|100|N||SHLX|SHLX|N
 Y|SHM|SPDR Nuveen Bloomberg Barclays Short Term Municipal Bond ETF|P| |Y|100|N||SHM|SHM|N
 Y|SHO|Sunstone Hotel Investors, Inc. Sunstone Hotel Investors, Inc. Common Shares|N| |N|100|N||SHO|SHO|N
@@ -9261,4 +9265,4 @@ Y|ZXZZT|NASDAQ TEST STOCK|Q|G| |100|Y|N||ZXZZT|N
 Y|ZYME|Zymeworks Inc. Common Shares|N| |N|100|N||ZYME|ZYME|N
 Y|ZYNE|Zynerba Pharmaceuticals, Inc. - Common Stock|Q|G|N|100|N|N||ZYNE|N
 Y|ZYXI|Zynex, Inc. - Common Stock|Q|S|N|100|N|N||ZYXI|N
-File Creation Time: 1104202015:43|||||
+File Creation Time: 1105202014:03|||||

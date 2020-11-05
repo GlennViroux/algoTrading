@@ -65,8 +65,8 @@ class BackTesting(Stocks):
             'number_of_EMA_crossings','support_level','sell_criterium','drop_buying',
             'rel_max_drop_buying','max_drop_buying']
 
-        self.stats = {"param":[],"total_result_plot":[],"individual_result_plot":[]}
-        self.columns_stats = ['param','total_result_plot','individual_result_plot']
+        self.stats = {"param":[],"type":[],"total_result_plot":[],"individual_result_plot":[]}
+        self.columns_stats = ['param','type','total_result_plot','individual_result_plot']
 
         self.csv_file = "./backtesting/backtesting_cumulative.csv"
         self.csv_file_stats = "./backtesting/backtesting_stats.csv"
@@ -302,7 +302,7 @@ class BackTesting(Stocks):
     def update_yql_calls_file(self):
         utils.write_json(self.yahoo_calls,self.callsYQL_file)
 
-    def append_csv(self,myfile=None,df=None,columns=None):
+    def append_csv(self,myfile=None,df=None,columns=None,mode='a'):
         if not myfile:
             myfile = self.csv_file
         if not isinstance(df,pd.DataFrame) or df.empty:
@@ -311,7 +311,7 @@ class BackTesting(Stocks):
             columns = self.columns
 
         header = not os.path.isfile(myfile) or os.stat(myfile).st_size==0
-        df.to_csv(myfile,mode='a',columns=columns,header=header,index=False)
+        df.to_csv(myfile,mode=mode,columns=columns,header=header,index=False)
 
     @classmethod
     def upload_results(cls):
@@ -369,21 +369,25 @@ class BackTesting(Stocks):
             else:
                 conf_limit = None
 
-            self.get_stats_param(param,conf_limit,params[param])
+            self.get_stats_param(param,conf_limit,'price',params[param])
+            self.get_stats_param(param,conf_limit,'EMA',params[param])
         
         df = pd.DataFrame.from_dict(self.stats)
         
-        self.append_csv(self.csv_file_stats,df,self.columns_stats)
+        self.append_csv(self.csv_file_stats,df,self.columns_stats,mode='w')
         self.upload_stats()
 
-    def get_stats_param(self,name,conf_limit,upper_threshold=False):
+    def get_stats_param(self,name,conf_limit,sell_criterium,upper_threshold=False):
+        FUNCTION='get_stats_param'
         csv_file = Path(self.csv_file)
         if not csv_file.is_file():
             return False
 
         df = pd.read_csv(csv_file)
+        df = df[df.sell_criterium==sell_criterium]
 
-        if not name in df.columns:
+        if df.empty or not name in df.columns:
+            self.logger.error(f"Error, breaking off ({name}, {sell_criterium})",extra={'function':FUNCTION})
             return False
             
         param_min = df[name].min()
@@ -397,16 +401,17 @@ class BackTesting(Stocks):
             else:
                 total_results.append(df[df[name] >= threshold].result.sum())
         
+        self.stats["param"].append(name)
+        self.stats["type"].append(sell_criterium)
         df_total_result = pd.DataFrame(list(zip(points,total_results)),columns=[name,'result'])
-        self.plot_statistics('total',df_total_result,name,conf_limit,upper_threshold)
+        self.plot_statistics('total',df_total_result,name,conf_limit,upper_threshold,sell_criterium)
 
         df_scatter_results = df[[name,'result']]
-        self.plot_statistics('scatter',df_scatter_results,name,conf_limit,upper_threshold)
+        self.plot_statistics('scatter',df_scatter_results,name,conf_limit,upper_threshold,sell_criterium)
 
-    def plot_statistics(self,what,df,name,conf_limit,upper_threshold):
+    def plot_statistics(self,what,df,name,conf_limit,upper_threshold,sell_criterium):
         fig,ax = plt.subplots()
         
-
         cols = df.columns
         if conf_limit:
             lower = df[cols[0]].iloc[0]
@@ -426,20 +431,19 @@ class BackTesting(Stocks):
                     lower_plot = max(conf_limit,lower)
                     ax.axvspan(xmin=lower_plot,xmax=upper,alpha=0.3,facecolor='tab:red')
 
-
         ax.scatter(df[cols[0]],df[cols[1]])
-        
+
         if what=='total':
             title = f"Total statistics for {name}"
             ylabel = "Total result [$]"
-            plot_dir = Path(self.stats_plot_dir) / 'total'
-            hyperlink = "=HYPERLINK(\"http://{}:5050/backtesting/stats-total-{}\",\"{}\")".format(self.ip,name,"plot")
+            plot_dir = Path(self.stats_plot_dir) / 'total' / sell_criterium
+            hyperlink = f"=HYPERLINK(\"http://{self.ip}:5050/backtesting/stats-total-{sell_criterium}-{name}\",\"{name}\")"
             self.stats["total_result_plot"].append(hyperlink)
         elif what=='scatter':
             title = f"Individual statistics for {name}"
             ylabel = "Individual results [$]"
-            plot_dir = Path(self.stats_plot_dir) / 'individual'
-            hyperlink = "=HYPERLINK(\"http://{}:5050/backtesting/stats-individual-{}\",\"{}\")".format(self.ip,name,"plot")
+            plot_dir = Path(self.stats_plot_dir) / 'individual' / sell_criterium
+            hyperlink = f"=HYPERLINK(\"http://{self.ip}:5050/backtesting/stats-individual-{sell_criterium}-{name}\",\"{name}\")"
             self.stats["individual_result_plot"].append(hyperlink)
         else:
             return False
@@ -453,10 +457,6 @@ class BackTesting(Stocks):
         fig.savefig(plot_dir / f"{name}.png")
         del fig
         plt.close()
-
-        
-        if not name in self.stats["param"]:
-            self.stats["param"].append(name)
         
         
 

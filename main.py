@@ -1,5 +1,6 @@
 from flask import Flask,send_from_directory,jsonify,make_response
 from flask_restful import Api,Resource,abort,reqparse
+from pathlib import Path
 import threading
 import utils
 import os.path
@@ -41,12 +42,13 @@ class BackTesting(Resource):
             return make_response(jsonify(hourly_calls=yql_calls['hourly_calls'],daily_calls=yql_calls['daily_calls'],total_calls=yql_calls['total_calls']),200)
         elif ticker.split("-")[0]=="stats":
             what = ticker.split("-")[1]
-            param = ticker.split("-")[2]
-            plotpath=utils.get_back_stat_plot(param,what)
+            sell_criterium = ticker.split("-")[2]
+            param = ticker.split("-")[3]
+            plotpath=utils.get_back_stat_plot(param,what,sell_criterium)
             if plotpath==None:
                 abort(404,message="Plot for {} does not exist.".format(ticker))
-            filename=os.path.basename(plotpath)
-            return send_from_directory(f"./backtesting/stats_plots/{what}/",filename,attachment_filename=filename)
+            plotpath = Path(plotpath)
+            return send_from_directory(plotpath.parent,plotpath.name,attachment_filename=plotpath.name)
 
 
         plotpath=utils.get_back_plot(ticker)
