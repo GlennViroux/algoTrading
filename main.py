@@ -35,12 +35,7 @@ start_time=time.time()
 
 class BackTesting(Resource):
     def get(self,ticker):
-        if ticker.lower()=="yql_calls":
-            yql_calls = utils.read_json_data('./backtesting/calls_yql.json')
-            if not yql_calls:
-                yql_calls = {'hourly_calls':0,'daily_calls':0,'total_calls':0}
-            return make_response(jsonify(hourly_calls=yql_calls['hourly_calls'],daily_calls=yql_calls['daily_calls'],total_calls=yql_calls['total_calls']),200)
-        elif ticker.split("-")[0]=="stats":
+        if ticker.split("-")[0]=="stats":
             what = ticker.split("-")[1]
             sell_criterium = ticker.split("-")[2]
             param = ticker.split("-")[3]
@@ -132,6 +127,13 @@ class GetInfo(Resource):
         elif info_id.upper()=="PASTSESSIONS":
             past_sessions=utils.get_dates_past_sessions()
             return make_response(jsonify(past_sessions),200)
+
+        elif info_id.upper()=="BACKTESTING":
+            yql_calls = utils.read_json_data('./backtesting/calls_yql.json')
+            if not yql_calls:
+                yql_calls = {'hourly_calls':0,'daily_calls':0,'total_calls':0,'duration':0}
+            return make_response(jsonify(hourly_calls=yql_calls['hourly_calls'],daily_calls=yql_calls['daily_calls'],total_calls=yql_calls['total_calls'],duration=yql_calls['duration']),200)
+
 
 
         abort(404,message="This operation is not allowed.")

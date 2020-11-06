@@ -7,6 +7,7 @@ import time
 import os
 
 def main(days=None,number=None,sell_criterium=None,stocks=None):
+    start_time = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument('-d','--days_in_past',default=40,type=int)
     parser.add_argument('-n','--number_of_stocks',default=1,type=int)
@@ -30,9 +31,10 @@ def main(days=None,number=None,sell_criterium=None,stocks=None):
     
     b.append_csv()
     b.upload_results()
-    b.update_yql_calls_file()
-    
     b.get_all_stats()
+
+    delta = time.time()-start_time
+    b.update_yql_calls_file(delta)
 
 
 if __name__=='__main__':

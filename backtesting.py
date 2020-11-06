@@ -39,7 +39,7 @@ class BackTesting(Stocks):
             start = datetime.strptime(start,'%Y/%m/%d-%H:%M:%S')
         self.start = start
 
-        self.ip = "192.168.0.13"
+        self.ip = "192.168.0.14"
         self.M = 500
         self.Pavg = 20
         
@@ -299,7 +299,9 @@ class BackTesting(Stocks):
     def get_df(self):
         return pd.DataFrame.from_dict(self.results)   
 
-    def update_yql_calls_file(self):
+    def update_yql_calls_file(self,duration):
+        data = self.yahoo_calls
+        data['duration']=duration
         utils.write_json(self.yahoo_calls,self.callsYQL_file)
 
     def append_csv(self,myfile=None,df=None,columns=None,mode='a'):
@@ -310,7 +312,7 @@ class BackTesting(Stocks):
         if not columns:
             columns = self.columns
 
-        header = not os.path.isfile(myfile) or os.stat(myfile).st_size==0
+        header = not os.path.isfile(myfile) or os.stat(myfile).st_size==0 or mode=='w'
         df.to_csv(myfile,mode=mode,columns=columns,header=header,index=False)
 
     @classmethod
@@ -352,6 +354,7 @@ class BackTesting(Stocks):
         return True
 
     def get_all_stats(self):
+        FUNCTION='get_all_stats'
         '''
         Get statisticks about all data available in the CSV file.
         '''
@@ -362,6 +365,8 @@ class BackTesting(Stocks):
             'rel_max_drop_buying':False,
             'max_drop_buying':False
             }
+
+        self.logger.info("Get all statistics",extra={"function":FUNCTION})
 
         for param in params:
             if param in self.conf['trade_logic']:
@@ -379,8 +384,11 @@ class BackTesting(Stocks):
 
     def get_stats_param(self,name,conf_limit,sell_criterium,upper_threshold=False):
         FUNCTION='get_stats_param'
+
+        self.logger.debug(f"Getting statistics for {name} and sell criterium {sell_criterium}",extra={"function":FUNCTION})
         csv_file = Path(self.csv_file)
         if not csv_file.is_file():
+            self.logger.error("CSV file is not valid. Breaking off.",extra={"function":FUNCTION})
             return False
 
         df = pd.read_csv(csv_file)
@@ -410,7 +418,7 @@ class BackTesting(Stocks):
         self.plot_statistics('scatter',df_scatter_results,name,conf_limit,upper_threshold,sell_criterium)
 
     def plot_statistics(self,what,df,name,conf_limit,upper_threshold,sell_criterium):
-        fig,ax = plt.subplots()
+        fig,ax = plt.subplots(figsize=(10,6),dpi=200)
         
         cols = df.columns
         if conf_limit:
@@ -431,7 +439,7 @@ class BackTesting(Stocks):
                     lower_plot = max(conf_limit,lower)
                     ax.axvspan(xmin=lower_plot,xmax=upper,alpha=0.3,facecolor='tab:red')
 
-        ax.scatter(df[cols[0]],df[cols[1]])
+        ax.scatter(df[cols[0]],df[cols[1]],s=4,alpha=0.6)
 
         if what=='total':
             title = f"Total statistics for {name}"
