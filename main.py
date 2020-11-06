@@ -72,6 +72,10 @@ class BackTesting(Resource):
             BackTesting.upload_results()
             BackTesting.upload_stats()
         elif command.lower()=="launchbacktesting":
+            for thread in threading.enumerate():
+                if thread.getName()=='main_backtesting':
+                    return "Backtrading algorithm is already running.",420
+
             days = args['days'] if args['days'] else 42
             number = args['number'] if args['number'] else 1
             sell_criterium = args['sell_criterium'] if args['sell_criterium'] else 'EMA'

@@ -2056,6 +2056,7 @@ Y|DBAW|Xtrackers MSCI All World ex US Hedged Equity ETF|P| |Y|100|N||DBAW|DBAW|N
 Y|DBB|Invesco DB Base Metals Fund|P| |Y|100|N||DBB|DBB|N
 Y|DBC|Invesco DB Commodity Index Tracking Fund|P| |Y|100|N||DBC|DBC|N
 Y|DBD|Diebold Nixdorf Incorporated Common Stock|N| |N|100|N||DBD|DBD|N
+Y|DBDRU|Roman DBDR Tech Acquisition Corp. - Unit|Q|S|N|100|N|N||DBDRU|N
 Y|DBE|Invesco DB Energy Fund|P| |Y|100|N||DBE|DBE|N
 Y|DBEF|Xtrackers MSCI EAFE Hedged Equity ETF|P| |Y|100|N||DBEF|DBEF|N
 Y|DBEH|iM DBi Hedge Strategy ETF|P| |Y|100|N||DBEH|DBEH|N
@@ -2533,7 +2534,7 @@ Y|EIS|iShares Inc iShares MSCI Israel ETF|P| |Y|100|N||EIS|EIS|N
 Y|EIX|Edison International Common Stock|N| |N|100|N||EIX|EIX|N
 Y|EJAN|Innovator ETFs Trust Innovator MSCI Emerging Markets Power Buffer ETF - January|P| |Y|100|N||EJAN|EJAN|N
 Y|EJUL|Innovator MSCI Emerging Markets Power Buffer ETF - July|P| |Y|100|N||EJUL|EJUL|N
-Y|EKAR|Ideanomics NextGen Vehicles and Technology ETF|P| |Y|100|N||EKAR|EKAR|N
+Y|EKAR|Capital Link NextGen Vehicles & Technology ETF|P| |Y|100|N||EKAR|EKAR|N
 Y|EKSO|Ekso Bionics Holdings, Inc. - Common Stock|Q|S|N|100|N|N||EKSO|N
 Y|EL|Estee Lauder Companies, Inc. (The) Common Stock|N| |N|100|N||EL|EL|N
 Y|ELA|Envela Corporation Common Stock|A| |N|100|N||ELA|ELA|N
@@ -2601,7 +2602,9 @@ Y|ENLV|Enlivex Therapeutics Ltd. - Ordinary Shares|Q|S|N|100|N|N||ENLV|N
 Y|ENO|Entergy New Orleans, LLC First Mortgage Bonds, 5.50% Series due April 1, 2066|N| |N|100|N||ENO|ENO|N
 Y|ENOB|Enochian Biosciences, Inc. - Common Stock|Q|S|N|100|N|N||ENOB|N
 Y|ENOR|iShares Inc iShares MSCI Norway ETF|Z| |Y|100|N||ENOR|ENOR|N
+Y|ENPC|Executive Network Partnering Corporation Class A Common Stock|N| |N|100|N||ENPC|ENPC|N
 Y|ENPC.U|Executive Network Partnering Corporation Units, each consisting of one share of Class A common stock, and one-quarter of one redeemable warrant|N| |N|100|N||ENPC.U|ENPC=|N
+Y|ENPC.W|Executive Network Partnering Corporation Warrants, each whole warrant exercisable for one share of Class A common stock at an exercise price of $28.75|N| |N|100|N||ENPC.WS|ENPC+|N
 Y|ENPH|Enphase Energy, Inc. - Common Stock|Q|G|N|100|N|N||ENPH|N
 Y|ENR|Energizer Holdings, Inc. Common Stock|N| |N|100|N||ENR|ENR|N
 Y|ENR$A|Energizer Holdings, Inc. 7.50% Series A Mandatory Convertible Preferred Stock|N| |N|100|N||ENRpA|ENR-A|N
@@ -2652,7 +2655,9 @@ Y|EQAL|Invesco Russell 1000 Equal Weight ETF|P| |Y|100|N||EQAL|EQAL|N
 Y|EQBK|Equity Bancshares, Inc. - Class A Common Stock|Q|Q|N|100|N|N||EQBK|N
 Y|EQC|Equity Commonwealth Common Shares of Beneficial Interest|N| |N|100|N||EQC|EQC|N
 Y|EQC$D|Equity Commonwealth 6.50% Pfd Conv Shs Ser D|N| |N|100|N||EQCpD|EQC-D|N
+Y|EQD|Equity Distribution Acquisition Corp. Class A Common Stock|N| |N|100|N||EQD|EQD|N
 Y|EQD.U|Equity Distribution Acquisition Corp. Units|N| |N|100|N||EQD.U|EQD=|N
+Y|EQD.W|Equity Distribution Acquisition Corp. Warrants, each whole warrant exercisable for one share of Class A common stock at an exercise price of $11.50|N| |N|100|N||EQD.WS|EQD+|N
 Y|EQH|Equitable Holdings, Inc. Common Stock|N| |N|100|N||EQH|EQH|N
 Y|EQH$A|Equitable Holdings, Inc. Depositary Shares|N| |N|100|N||EQHpA|EQH-A|N
 Y|EQIX|Equinix, Inc. - Common Stock|Q|Q|N|100|N|N||EQIX|N
@@ -4607,8 +4612,6 @@ Y|JBL|Jabil Inc. Common Stock|N| |N|100|N||JBL|JBL|N
 Y|JBLU|JetBlue Airways Corporation - Common Stock|Q|Q|N|100|N|N||JBLU|N
 Y|JBSS|John B. Sanfilippo & Son, Inc. - Common Stock|Q|Q|N|100|N|N||JBSS|N
 Y|JBT|John Bean Technologies Corporation Common Stock|N| |N|100|N||JBT|JBT|N
-Y|JCAP|Jernigan Capital, Inc. Common Stock|N| |N|100|N||JCAP|JCAP|N
-Y|JCAP$B|Jernigan Capital, Inc. 7.00% Series B Cumulative Redeemable Perpetual Preferred Stock|N| |N|100|N||JCAPpB|JCAP-B|N
 Y|JCE|Nuveen Core Equity Alpha Fund Nuveen Core Equity Alpha Fund Common Shares of Beneficial Interest|N| |N|100|N||JCE|JCE|N
 Y|JCI|Johnson Controls International plc Ordinary Share|N| |N|100|N||JCI|JCI|N
 Y|JCO|Nuveen Credit Opportunities 2022 Target Term Fund Common Shares of Beneficial Interest|N| |N|100|N||JCO|JCO|N
@@ -4869,7 +4872,7 @@ Y|KOCT|Innovator Russell 2000 Power Buffer ETF - October|Z| |Y|100|N||KOCT|KOCT|
 Y|KOD|Kodiak Sciences Inc - Common Stock|Q|G|N|100|N|N||KOD|N
 Y|KODK|Eastman Kodak Company Common New|N| |N|100|N||KODK|KODK|N
 Y|KOF|Coca Cola Femsa S.A.B. de C.V.  American Depositary Shares, each representing 10 Units (each Unit consists of 3 Series B Shares and 5 Series L Shares)|N| |N|100|N||KOF|KOF|N
-Y|KOIN|Innovation Shares NextGen Protocol ETF|P| |Y|100|N||KOIN|KOIN|N
+Y|KOIN|Capital Link NextGen Protocol ETF|P| |Y|100|N||KOIN|KOIN|N
 Y|KOKU|Xtrackers MSCI Kokusai Equity ETF|P| |Y|100|N||KOKU|KOKU|N
 Y|KOL|VanEck Vectors Coal ETF|P| |Y|100|N||KOL|KOL|N
 Y|KOLD|ProShares UltraShort Bloomberg Natural Gas|P| |Y|100|N||KOLD|KOLD|N
@@ -6089,6 +6092,7 @@ Y|OCSI|Oaktree Strategic Income Corporation - Common Stock|Q|Q|N|100|N|N||OCSI|N
 Y|OCSL|Oaktree Specialty Lending Corporation - Common Stock|Q|Q|N|100|N|N||OCSL|N
 Y|OCTZ|TrueShares Structured Outcome (October) ETF|Z| |Y|100|N||OCTZ|OCTZ|N
 Y|OCUL|Ocular Therapeutix, Inc. - Common Stock|Q|G|N|100|N|N||OCUL|N
+Y|OCUP|Ocuphire Pharma, Inc. - Common Stock|Q|S|N|100|N|N||OCUP|N
 Y|OCX|OncoCyte Corporation Common Stock|A| |N|100|N||OCX|OCX|N
 Y|ODC|Oil-Dri Corporation Of America Common Stock|N| |N|100|N||ODC|ODC|N
 Y|ODFL|Old Dominion Freight Line, Inc. - Common Stock|Q|Q|N|100|N|N||ODFL|N
@@ -7020,7 +7024,6 @@ Y|REVG|REV Group, Inc. Common Stock|N| |N|100|N||REVG|REVG|N
 Y|REVS|Columbia Research Enhanced Value ETF|P| |Y|100|N||REVS|REVS|N
 Y|REW|ProShares UltraShort Technology|P| |Y|100|N||REW|REW|N
 Y|REX|REX American Resources Corporation|N| |N|100|N||REX|REX|N
-Y|REXN|Rexahn Pharmaceuticals, Inc. - Common Stock|Q|S|N|100|N|N||REXN|N
 Y|REXR|Rexford Industrial Realty, Inc. Common Stock|N| |N|100|N||REXR|REXR|N
 Y|REXR$A|Rexford Industrial Realty, Inc. 5.875% Series A Cumulative Redeemable Preferred Stock|N| |N|100|N||REXRpA|REXR-A|N
 Y|REXR$B|Rexford Industrial Realty, Inc. 5.875% Series B Cumulative Redeemable Preferred Stock|N| |N|100|N||REXRpB|REXR-B|N
@@ -7088,7 +7091,6 @@ Y|RIO|Rio Tinto Plc Common Stock|N| |N|100|N||RIO|RIO|N
 Y|RIOT|Riot Blockchain, Inc - Common Stock|Q|S|N|100|N|N||RIOT|N
 Y|RISN|Inspire Tactical Balanced ESG ETF|P| |Y|100|N||RISN|RISN|N
 Y|RIV|RiverNorth Opportunities Fund, Inc. Common Stock|N| |N|100|N||RIV|RIV|N
-Y|RIV.R|RiverNorth Opportunities Fund, Inc. Rights (expiring November 6, 2020)|N| |N|100|N||RIVr|RIV^|N
 Y|RIVE|Riverview Financial Corporation - Common Stock|Q|G|N|100|N|N||RIVE|N
 Y|RJA|AB Svensk Ekportkredit (Swedish Export Credit Corporation) ELEMENTS Linked to the Rogers International Commodity Index - Agriculture Total Return Structured Product|P| |N|100|N||RJA|RJA|N
 Y|RJF|Raymond James Financial, Inc. Common Stock|N| |N|100|N||RJF|RJF|N
@@ -9071,7 +9073,7 @@ Y|XAN|Exantas Capital Corp.|N| |N|100|N||XAN|XAN|N
 Y|XAN$C|Exantas Capital Corp. |N| |N|100|N||XANpC|XAN-C|N
 Y|XAR|SPDR S&P Aerospace & Defense ETF|P| |Y|100|N||XAR|XAR|N
 Y|XBI|SPDR Series Trust  SPDR S&P Biotech ETF|P| |Y|100|N||XBI|XBI|N
-Y|XBIO|Xenetic Biosciences, Inc. - Common Stock|Q|S|N|100|N|N||XBIO|N
+Y|XBIO|Xenetic Biosciences, Inc. - Common Stock|Q|S|N|100|N|D||XBIO|N
 Y|XBIOW|Xenetic Biosciences, Inc. - Warrants|Q|S|N|100|N|N||XBIOW|N
 Y|XBIT|XBiotech Inc. - Common Stock|Q|Q|N|100|N|N||XBIT|N
 Y|XBUY|Amplify International Online Retail ETF|P| |Y|100|N||XBUY|XBUY|N
@@ -9265,4 +9267,4 @@ Y|ZXZZT|NASDAQ TEST STOCK|Q|G| |100|Y|N||ZXZZT|N
 Y|ZYME|Zymeworks Inc. Common Shares|N| |N|100|N||ZYME|ZYME|N
 Y|ZYNE|Zynerba Pharmaceuticals, Inc. - Common Stock|Q|G|N|100|N|N||ZYNE|N
 Y|ZYXI|Zynex, Inc. - Common Stock|Q|S|N|100|N|N||ZYXI|N
-File Creation Time: 1105202014:03|||||
+File Creation Time: 1106202014:03|||||
