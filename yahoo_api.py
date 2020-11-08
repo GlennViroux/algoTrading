@@ -81,15 +81,16 @@ class YahooAPI:
 
         return df
 
-    def calculate_EMAs( self,
-                        ticker,
-                        start,
-                        end,
-                        interval,
-                        period,
-                        smallEMA=True,
-                        df_historic_data=pd.DataFrame,
-                        logger=None):
+    def calculate_EMAs( 
+        self,
+        ticker,
+        start,
+        end,
+        interval,
+        period,
+        label,
+        df_historic_data=pd.DataFrame,
+        logger=None):
 
         FUNCTION="calculate_EMAs"
         '''
@@ -127,14 +128,10 @@ class YahooAPI:
             EMAs.append(EMA)
 
         # 4) Converto to pandas df
-        tag='bigEMA'
-        if smallEMA:
-            tag='smallEMA'
-
-        result={'timestamps':timestamps,tag:EMAs}
+        result={'timestamps':timestamps,label:EMAs}
         df=pd.DataFrame(result)
 
-        return df
+        return df.set_index('timestamps')
 
     def get_data(self,ticker,start,end,interval,period_small_EMA,period_big_EMA,logger=None):
         FUNCTION='get_data'
@@ -147,21 +144,25 @@ class YahooAPI:
             return df_data
         df_base=df_data.set_index('timestamps')
 
-        df_smallEMA=self.calculate_EMAs(ticker,start,end,interval,period_small_EMA,smallEMA=True,df_historic_data=df_data,logger=logger)
+        df_smallEMA=self.calculate_EMAs(ticker,start,end,interval,period_small_EMA,'smallEMA',df_historic_data=df_data,logger=logger)
         if df_smallEMA.empty:
             if logger:
                 logger.debug("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_small_EMA),extra={'function':FUNCTION})
             return pd.DataFrame
-        df_smallEMA=df_smallEMA.set_index('timestamps')
 
-        df_bigEMA=self.calculate_EMAs(ticker,start,end,interval,period_big_EMA,smallEMA=False,df_historic_data=df_data,logger=logger)
+        df_bigEMA=self.calculate_EMAs(ticker,start,end,interval,period_big_EMA,'bigEMA',df_historic_data=df_data,logger=logger)
         if df_bigEMA.empty:
             if logger:
                 logger.debug("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,period_big_EMA),extra={'function':FUNCTION})
             return pd.DataFrame
-        df_bigEMA=df_bigEMA.set_index('timestamps')
 
-        df=pd.concat([df_base,df_smallEMA,df_bigEMA],axis=1,join='outer').reset_index()
+        df_simpleEMA=self.calculate_EMAs(ticker,start,end,interval,1,'simpleEMA',df_historic_data=df_data,logger=logger)
+        if df_simpleEMA.empty:
+            if logger:
+                logger.debug("Ticker {} and EMA period {}: no valid data from calculating the EMAs was received.".format(ticker,1),extra={'function':FUNCTION})
+            return pd.DataFrame
+
+        df=pd.concat([df_base,df_smallEMA,df_bigEMA,df_simpleEMA],axis=1,join='outer').reset_index()
         df.drop('index',axis=1,inplace=True,errors='ignore')
         df.sort_values("timestamps",inplace=True)
 

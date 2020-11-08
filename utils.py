@@ -262,7 +262,7 @@ def get_back_plot(ticker):
     return max(list_of_files, key=os.path.getctime)
 
 def get_back_stat_plot(param,what,sell_criterium):
-    list_of_files=glob.glob(f'./backtesting/stats_plots/{what}/{sell_criterium}/*{param}.png')
+    list_of_files=glob.glob(f'./backtesting/stats_plots/{what}/{sell_criterium}/{param}.png')
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)

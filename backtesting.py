@@ -9,6 +9,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime,timedelta
 from pathlib import Path
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import pandas as pd
 import numpy as np
 import utils
@@ -44,18 +45,16 @@ class BackTesting(Stocks):
         self.Pavg = 20
         
         self.sell_criterium = sell_criterium
-        self.cross = 'cross_sEMA_bEMA'
-        if sell_criterium=='price':
-            self.cross = 'cross_close_bEMA'
 
         self.conf = utils.read_config("./config/config.json")
         self.logger=utils.configure_logger("default","./GLENNY_LOG.txt",self.conf["logging"])
-        self.initialize_stocks(start,self.logger,self.conf,number_of_stocks,update_nasdaq_file=True,stocks=stocks)
+        self.initialize_stocks(start,self.logger,self.conf,number_of_stocks,update_nasdaq_file=False,stocks=stocks)
 
         self.results = {"stock":[],"bought":[],"sold":[],"price_bought":[],"price_sold":[],
                         "number":[],"result":[],"drop_buying":[],"support_level_start":[],
                         "start_date":[],"comment":[],"timestamp":[],"sell_criterium":[],
-                        'rel_max_drop_buying':[],'max_drop_buying':[]}
+                        'rel_max_drop_buying':[],'max_drop_buying':[],'rel_max_jump_buying':[],
+                        'max_jump_buying':[],'duration':[]}
         for param in self.ACCEPT_PARAMS:
             self.results[param]=[]
 
@@ -63,7 +62,8 @@ class BackTesting(Stocks):
             'timestamp','stock','result','comment','start_date','bought','sold','price_bought',
             'price_sold','number','surface_factor','EMA_surface_plus','EMA_surface_min',
             'number_of_EMA_crossings','support_level','sell_criterium','drop_buying',
-            'rel_max_drop_buying','max_drop_buying']
+            'rel_max_drop_buying','max_drop_buying','rel_max_jump_buying','max_jump_buying',
+            'duration']
 
         self.stats = {"param":[],"type":[],"total_result_plot":[],"individual_result_plot":[]}
         self.columns_stats = ['param','type','total_result_plot','individual_result_plot']
@@ -92,6 +92,9 @@ class BackTesting(Stocks):
         '''
         Append one result to the stack
         '''
+        duration = 0
+        if isinstance(bought,datetime) and isinstance(sold,datetime):
+            duration = (sold-bought).total_seconds()
 
         stock_field = "=HYPERLINK(\"http://{}:5050/backtesting/{}\",\"{}\")".format(self.ip,stock,stock)
         self.results["timestamp"].append(timestamp)
@@ -106,11 +109,14 @@ class BackTesting(Stocks):
         self.results["drop_buying"].append(params.latest_drop)
         self.results["rel_max_drop_buying"].append(params.rel_max_drop)
         self.results["max_drop_buying"].append(params.max_drop)
+        self.results["rel_max_jump_buying"].append(params.rel_max_jump)
+        self.results["max_jump_buying"].append(params.max_jump)
         self.results["support_level_start"].append(support_level_start)
         self.results["comment"].append(comment)
         self.results["sell_criterium"].append(self.sell_criterium)
+        self.results["duration"].append(duration)
         for param in self.ACCEPT_PARAMS:
-            self.results[param].append(round(self.current_status[stock][param],2))
+            self.results[param].append(self.current_status[stock][param])
 
         if isinstance(bought,str):
             bought=None
@@ -123,40 +129,66 @@ class BackTesting(Stocks):
 
     def get_df_bought(self,df):
         # cross -1 means smallEMA goes under bigEMA
+        # cross +1 means smallEMA goes over bigEMA
         diff_EMAs = df.smallEMA-df.bigEMA
         diff_EMAs_series = diff_EMAs.apply(lambda x : np.sign(x)/2).dropna().diff().rename("cross_sEMA_bEMA")
         # cross -1 means close goes under bigEMA
+        # cross +1 means close goes over bigEMA
         diff_close_bEMA = df.close-df.bigEMA
         diff_close_bEMA_series = diff_close_bEMA.apply(lambda x : np.sign(x)/2).dropna().diff().rename("cross_close_bEMA")
 
-        df_full = pd.concat([df,diff_EMAs_series,diff_close_bEMA_series],axis=1)
+        # cross -1 means simpleEMA goes under bigEMA
+        # cross +1 means simpleEMA goes over bigEMA
+        diff_simpleEMA_bigEMA = df.simpleEMA-df.bigEMA
+        diff_simpleEMA_bigEMA_series = diff_simpleEMA_bigEMA.apply(lambda x : np.sign(x)/2).dropna().diff().rename("cross_simpleEMA_bigEMA")
+
+        df_full = pd.concat([df,diff_EMAs_series,diff_close_bEMA_series,diff_simpleEMA_bigEMA_series],axis=1)
         return df_full
 
     def get_buy_info(self,df):
-        df_index = df[(df.timestamps>=self.start) & (df.cross_sEMA_bEMA==-1)]
-        if df_index.empty:
-            # If small EMA never goes below big EMA
-            return False
+        if self.sell_criterium=='EMA' or self.sell_criterium=='price':
+            df_index = df[(df.timestamps>=self.start) & (df.cross_sEMA_bEMA==-1)]
+            if df_index.empty:
+                return False
 
-        Pi_index = df_index.index.values[0]
-        Pi = round(df.loc[Pi_index].close,2)   
-        bought = df.loc[Pi_index].timestamps
+            Pi_index = df_index.index.values[0]
+            Pi = round(df.loc[Pi_index].close,2)   
+            bought = df.loc[Pi_index].timestamps
+        elif self.sell_criterium=='simple':
+            df_index = df[(df.timestamps>=self.start) & (df.cross_simpleEMA_bigEMA==1)]
+            if df_index.empty:
+                return False
 
+            first_crossing = df_index.iloc[0].timestamps
+            Pi = round(df_index.iloc[0].close,2)
+            df_first_crossing = df[(df.timestamps>=first_crossing) & (df.timestamps<=(first_crossing+timedelta(minutes=15))) & (df.cross_simpleEMA_bigEMA==-1)]
+            if df_first_crossing.empty:
+                return False
+            bought = first_crossing+timedelta(minutes=15)
+            df_bought = df[df.timestamps==bought]
+            Pi = df_bought.iloc[0].close
+            
         return Pi,bought
 
-    def check_if_sold_by_support_level(self,support_level,bought,df):
+    def get_sold_df(self,df,bought):
         if self.sell_criterium=='EMA':
-            df_sold = df[(df.timestamps>bought) & (df[self.cross]==1)]
+            df_sold = df[(df.timestamps>bought) & (df.cross_sEMA_bEMA==1)]
         elif self.sell_criterium=='price':
             df_EMAs_cross = df[(df.timestamps>bought) & (df.cross_sEMA_bEMA==1)]
             if df_EMAs_cross.empty:
                 EMA_cross_timestamp = bought
             else:
                 EMA_cross_timestamp = df_EMAs_cross.iloc[0].timestamps
-            df_sold = df[(df.timestamps>bought) & (df.timestamps>=EMA_cross_timestamp) & (df[self.cross]==1)]
+            df_sold = df[(df.timestamps>bought) & (df.timestamps>=EMA_cross_timestamp) & (df.cross_close_bEMA==-1)] 
+        elif self.sell_criterium=='simple':
+            df_sold = df[(df.timestamps>bought) & (df.cross_simpleEMA_bigEMA==-1)]
         else:
-            raise Exception("No valid sell criterium ({}) has been provided. Valid options are EMA or price.".format(self.sell_criterium))
-        
+            raise Exception("No valid sell criterium ({}) has been provided. Valid options are EMA, price or simple.".format(self.sell_criterium))
+
+        return df_sold
+
+
+    def check_if_sold_by_support_level(self,support_level,bought,df,df_sold):
         df_support = df[(df.timestamps>=bought) & (df.close<=support_level)]
         if not df_support.empty:
             support_crossing = df_support.iloc[0].timestamps
@@ -167,8 +199,7 @@ class BackTesting(Stocks):
                 return Pe,support_crossing
         return False
 
-    def check_if_never_sold(self,df,bought):
-        df_sold = df[(df.timestamps>bought) & (df[self.cross]==1)]
+    def check_if_never_sold(self,df,bought,df_sold):
         if df_sold.empty:
             # small EMA never rises again above big EMA
             Pe = round(df.iloc[-1].close,2)
@@ -176,27 +207,18 @@ class BackTesting(Stocks):
             return Pe,sold
         return False
 
-    def get_sell_info(self,N,Pi,df,bought):
-        if self.sell_criterium=='EMA':
-            df_sold = df[(df.timestamps>bought) & (df[self.cross]==1)]
-        elif self.sell_criterium=='price':
-            df_EMAs_cross = df[(df.timestamps>bought) & (df.cross_sEMA_bEMA==1)]
-            if df_EMAs_cross.empty:
-                EMA_cross_timestamp = bought
-            else:
-                EMA_cross_timestamp = df_EMAs_cross.iloc[0].timestamps
-            df_sold = df[(df.timestamps>bought) & (df.timestamps>=EMA_cross_timestamp) & (df[self.cross]==-1)]
-        else:
-            raise Exception("No valid sell criterium ({}) has been provided. Valid options are EMA or price.".format(self.sell_criterium))
-
+    def get_sell_info(self,N,Pi,df,bought,df_sold):
         Pe = round(df_sold.iloc[0].close,2)
         sold = df_sold.iloc[0].timestamps
         W = round(N*(Pe-Pi),2)
         return Pe,sold,W
 
     def calculate_result(self,stock):
+        FUNCTION='calculate_result'
         if not stock in self.monitored_stocks:
             return False
+
+        self.logger.info(f"Ticker: {stock}, calculating result.",extra={'function':FUNCTION})
 
         start_data = self.start - timedelta(days=self.conf['trade_logic']['yahoo_period_historic_data'])
         end_data = start_data + timedelta(days=59)
@@ -239,9 +261,11 @@ class BackTesting(Stocks):
 
         if not params.get_drop(bought,self.logger):
             return False
+
+        df_sold = self.get_sold_df(df,bought)
         
         support_level_start = self.current_status[stock]["support_level"]
-        support_response = self.check_if_sold_by_support_level(support_level_start,bought,df)
+        support_response = self.check_if_sold_by_support_level(support_level_start,bought,df,df_sold)
         if support_response:
             Pe,support_crossing = support_response
             self.append_result(
@@ -260,7 +284,7 @@ class BackTesting(Stocks):
                 comment="Bought and sold because of support level")
             return True
 
-        never_sold_response = self.check_if_never_sold(df,bought)
+        never_sold_response = self.check_if_never_sold(df,bought,df_sold)
         if never_sold_response:
             Pe,sold = never_sold_response
             self.append_result(
@@ -279,7 +303,7 @@ class BackTesting(Stocks):
                 comment="Bought but never sold")
             return True
 
-        Pe,sold,W = self.get_sell_info(N,Pi,df,bought)
+        Pe,sold,W = self.get_sell_info(N,Pi,df,bought,df_sold)
 
         self.append_result(
             df=df,
@@ -363,7 +387,10 @@ class BackTesting(Stocks):
             'EMA_surface_plus':True,
             'EMA_surface_min':False,
             'rel_max_drop_buying':False,
-            'max_drop_buying':False
+            'max_drop_buying':False,
+            'rel_max_jump_buying':False,
+            'max_jump_buying':False,
+            'duration':False
             }
 
         self.logger.info("Get all statistics",extra={"function":FUNCTION})
@@ -374,8 +401,12 @@ class BackTesting(Stocks):
             else:
                 conf_limit = None
 
+            self.logger.info("Get statistics for price method",extra={"function":FUNCTION})
             self.get_stats_param(param,conf_limit,'price',params[param])
+            self.logger.info("Get statistics for EMA method",extra={"function":FUNCTION})
             self.get_stats_param(param,conf_limit,'EMA',params[param])
+            self.logger.info("Get statistics for simple method",extra={"function":FUNCTION})
+            self.get_stats_param(param,conf_limit,'simple',params[param])
         
         df = pd.DataFrame.from_dict(self.stats)
         
@@ -392,6 +423,7 @@ class BackTesting(Stocks):
             return False
 
         df = pd.read_csv(csv_file)
+        df.start_date = pd.to_datetime(df.start_date)
         df = df[df.sell_criterium==sell_criterium]
 
         if df.empty or not name in df.columns:
@@ -412,12 +444,48 @@ class BackTesting(Stocks):
         self.stats["param"].append(name)
         self.stats["type"].append(sell_criterium)
         df_total_result = pd.DataFrame(list(zip(points,total_results)),columns=[name,'result'])
-        self.plot_statistics('total',df_total_result,name,conf_limit,upper_threshold,sell_criterium)
+        self.plot_statistics_total(df_total_result,name,conf_limit,upper_threshold,sell_criterium)
 
-        df_scatter_results = df[[name,'result']]
-        self.plot_statistics('scatter',df_scatter_results,name,conf_limit,upper_threshold,sell_criterium)
+        df_scatter_results = df[['start_date',name,'result']]
+        self.plot_statistics_scatter(df_scatter_results,name,conf_limit,upper_threshold,sell_criterium)
 
-    def plot_statistics(self,what,df,name,conf_limit,upper_threshold,sell_criterium):
+    def plot_statistics_scatter(self,df,name,conf_limit,upper_threshold,sell_criterium):
+        fig,ax = plt.subplots(figsize=(10,6),dpi=200)
+
+        viridis = cm.get_cmap('viridis', 12)
+        start_dates = pd.unique(df.start_date)
+        start_dates.sort()
+        first_date = start_dates[0]
+        last_date = start_dates[-1]
+        total_diff = (last_date-first_date)
+        for start_date in start_dates:
+            df_start_date = df[df.start_date==start_date]
+            #start_datetime = datetime.strptime(start_date,'%Y-%m-%d %H:%M:%S')
+            timediff = start_date - first_date
+            perc = timediff/total_diff
+            total = round(df_start_date.result.sum(),2)
+            label = f"{pd.to_datetime(str(start_date)).strftime('%Y/%m/%d')} " + "({0:>5}".format(total) + f", {len(df_start_date)})"
+            ax.scatter(df_start_date[name],df_start_date.result,c=[viridis(perc)],s=30,alpha=0.6,label=label)
+
+        title = f"Individual statistics for {name}"
+        ylabel = "Individual results [$]"
+        plot_dir = Path(self.stats_plot_dir) / 'individual' / sell_criterium
+        hyperlink = f"=HYPERLINK(\"http://{self.ip}:5050/backtesting/stats-individual-{sell_criterium}-{name}\",\"{name}\")"
+        self.stats["individual_result_plot"].append(hyperlink)
+
+        ax.set_title(title,fontsize='xx-large',)
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel("{} threshold".format(name))
+        ax.legend(loc='upper left',bbox_to_anchor=(1.02,1),ncol=1)
+        ax.grid()
+        plt.tight_layout()
+
+        plot_dir.mkdir(parents=True,exist_ok=True)
+        fig.savefig(plot_dir / f"{name}.png")
+        del fig
+        plt.close()
+
+    def plot_statistics_total(self,df,name,conf_limit,upper_threshold,sell_criterium):
         fig,ax = plt.subplots(figsize=(10,6),dpi=200)
         
         cols = df.columns
@@ -439,22 +507,13 @@ class BackTesting(Stocks):
                     lower_plot = max(conf_limit,lower)
                     ax.axvspan(xmin=lower_plot,xmax=upper,alpha=0.3,facecolor='tab:red')
 
-        ax.scatter(df[cols[0]],df[cols[1]],s=4,alpha=0.6)
+        ax.scatter(df[cols[0]],df[cols[1]],s=30,alpha=0.6)
 
-        if what=='total':
-            title = f"Total statistics for {name}"
-            ylabel = "Total result [$]"
-            plot_dir = Path(self.stats_plot_dir) / 'total' / sell_criterium
-            hyperlink = f"=HYPERLINK(\"http://{self.ip}:5050/backtesting/stats-total-{sell_criterium}-{name}\",\"{name}\")"
-            self.stats["total_result_plot"].append(hyperlink)
-        elif what=='scatter':
-            title = f"Individual statistics for {name}"
-            ylabel = "Individual results [$]"
-            plot_dir = Path(self.stats_plot_dir) / 'individual' / sell_criterium
-            hyperlink = f"=HYPERLINK(\"http://{self.ip}:5050/backtesting/stats-individual-{sell_criterium}-{name}\",\"{name}\")"
-            self.stats["individual_result_plot"].append(hyperlink)
-        else:
-            return False
+        title = f"Total statistics for {name}"
+        ylabel = "Total result [$]"
+        plot_dir = Path(self.stats_plot_dir) / 'total' / sell_criterium
+        hyperlink = f"=HYPERLINK(\"http://{self.ip}:5050/backtesting/stats-total-{sell_criterium}-{name}\",\"{name}\")"
+        self.stats["total_result_plot"].append(hyperlink)
 
         fig.suptitle(title,fontsize='xx-large')
         ax.set_ylabel(ylabel)

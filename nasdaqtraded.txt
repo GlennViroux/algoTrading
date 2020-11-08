@@ -311,7 +311,7 @@ Y|ALIM|Alimera Sciences, Inc. - Common Stock|Q|G|N|100|N|N||ALIM|N
 Y|ALIN$A|Altera Infrastructure L.P. 7.25% Series A |N| |N|100|N||ALINpA|ALIN-A|N
 Y|ALIN$B|Altera Infrastructure L.P. 8.50% Series B |N| |N|100|N||ALINpB|ALIN-B|N
 Y|ALIN$E|Altera Infrastructure L.P. 8.875% Series E |N| |N|100|N||ALINpE|ALIN-E|N
-Y|ALJJ|ALJ Regional Holdings, Inc. - Common Stock|Q|G|N|100|N|D||ALJJ|N
+Y|ALJJ|ALJ Regional Holdings, Inc. - Common Stock|Q|G|N|100|N|N||ALJJ|N
 Y|ALK|Alaska Air Group, Inc. Common Stock|N| |N|100|N||ALK|ALK|N
 Y|ALKS|Alkermes plc - Ordinary Shares|Q|Q|N|100|N|N||ALKS|N
 Y|ALL|Allstate Corporation (The) Common Stock|N| |N|100|N||ALL|ALL|N
@@ -4775,8 +4775,8 @@ Y|KBAL|Kimball International, Inc. - Class B Common Stock|Q|Q|N|100|N|N||KBAL|N
 Y|KBE|SPDR S&P Bank ETF|P| |Y|100|N||KBE|KBE|N
 Y|KBH|KB Home Common Stock|N| |N|100|N||KBH|KBH|N
 Y|KBLM|KBL Merger Corp. IV - Common Stock|Q|S|N|100|N|D||KBLM|N
-Y|KBLMR|KBL Merger Corp. IV - Rights|Q|S|N|100|N|D||KBLMR|N
-Y|KBLMU|KBL Merger Corp. IV - Unit|Q|S|N|100|N|D||KBLMU|N
+Y|KBLMR|KBL Merger Corp. IV - Rights|Q|S|N|100|N|N||KBLMR|N
+Y|KBLMU|KBL Merger Corp. IV - Unit|Q|S|N|100|N|N||KBLMU|N
 Y|KBLMW|KBL Merger Corp. IV - Warrant|Q|S|N|100|N|D||KBLMW|N
 Y|KBNT|Kubient, Inc. - Common Stock|Q|S|N|100|N|N||KBNT|N
 Y|KBNTW|Kubient, Inc. - Warrant|Q|S|N|100|N|N||KBNTW|N
@@ -7406,7 +7406,7 @@ Y|SDVY|First Trust SMID Cap Rising Dividend Achievers ETF|Q|G|Y|100|N|N||SDVY|N
 Y|SDY|SPDR S&P Dividend ETF|P| |Y|100|N||SDY|SDY|N
 Y|SDYL|ETRACS Monthly Pay 2xLeveraged S&P Dividend ETN|P| |N|100|N||SDYL|SDYL|N
 Y|SE|Sea Limited American Depositary Shares, each representing one Class A Ordinary Share|N| |N|100|N||SE|SE|N
-Y|SEAC|SeaChange International, Inc. - Common Stock|Q|Q|N|100|N|N||SEAC|N
+Y|SEAC|SeaChange International, Inc. - Common Stock|Q|Q|N|100|N|D||SEAC|N
 Y|SEAH.U|Sports Entertainment Acquisition Corp. Units, each consisting of one share of Class A Common Stock, and one-half of one redeemable Warrant|N| |N|100|N||SEAH.U|SEAH=|N
 Y|SEAS|SeaWorld Entertainment, Inc. Common Stock|N| |N|100|N||SEAS|SEAS|N
 Y|SEB|Seaboard Corporation Common Stock|A| |N|1|N||SEB|SEB|N
@@ -9267,4 +9267,4 @@ Y|ZXZZT|NASDAQ TEST STOCK|Q|G| |100|Y|N||ZXZZT|N
 Y|ZYME|Zymeworks Inc. Common Shares|N| |N|100|N||ZYME|ZYME|N
 Y|ZYNE|Zynerba Pharmaceuticals, Inc. - Common Stock|Q|G|N|100|N|N||ZYNE|N
 Y|ZYXI|Zynex, Inc. - Common Stock|Q|S|N|100|N|N||ZYXI|N
-File Creation Time: 1106202015:44|||||
+File Creation Time: 1106202021:34|||||

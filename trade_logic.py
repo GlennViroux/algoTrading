@@ -49,6 +49,8 @@ class AcceptParameters:
         self.support_level = "N/A"
         self.rel_max_drop = "N/A"
         self.max_drop = "N/A"
+        self.rel_max_jump = "N/A"
+        self.max_jump = "N/A"
         self.drop_period = config_params['trade_logic']['drop_period']
 
         timestamps_aware = self.df_data['timestamps'].map(lambda timestamp: timestamp.replace(tzinfo=pytz.timezone("Etc/GMT+4")))
@@ -87,12 +89,14 @@ class AcceptParameters:
 
         return latest_price > support_level
 
-    def is_overvalued(self):
+    def is_overvalued(self,date):
         '''
         This function checks if, at the latest timestamp available, the stock is overvalued.
         '''
-        latest_small_EMA = self.df_data.iloc[-1].smallEMA
-        latest_big_EMA = self.df_data.iloc[-1].bigEMA
+        date_aware = date.replace(tzinfo=pytz.timezone("Etc/GMT-2"))
+        df = self.df_data[self.df_data.timestamps<=date_aware]
+        latest_small_EMA = df.iloc[-1].smallEMA
+        latest_big_EMA = df.iloc[-1].bigEMA
 
         return latest_small_EMA > latest_big_EMA
 
@@ -147,6 +151,8 @@ class AcceptParameters:
         closes_diffs = df_rel.close.diff()
         self.rel_max_drop = round(closes_diffs.min()/df_rel.close.mean()*100,2)
         self.max_drop = round(closes_diffs.min(),3)
+        self.rel_max_jump = round(closes_diffs.max()/df_rel.close.mean()*100,2)
+        self.max_jump = round(closes_diffs.max(),3)
 
         # Get relative drop 
         max_val = df_rel.close.max()
@@ -221,6 +227,7 @@ class AcceptParameters:
             logger.debug("Ticker: {}. There weren't enough bigEMA measurements ({} vs required {}) to make a decision".format(
                 self.stock, len(bigEMAs), self.config_params['trade_logic']['number_of_big_EMAs_threshold']), extra={'function': FUNCTION})
 
+        '''
         D, A = utils.get_deriv_surf(bigEMAs, logger)
         self.bigEMA_derivative = D
         self.surface_indicator = A
@@ -234,6 +241,7 @@ class AcceptParameters:
             result = False
             logger.debug("Ticker: {}. Surface indicator is too high ({} vs required {})".format(
                 self.stock, A, self.config_params['trade_logic']['surface_indicator_threshold']), extra={'function': FUNCTION})
+        '''
 
         areas = self.get_EMA_areas(date,logger=logger)
         if not areas:
@@ -253,6 +261,7 @@ class AcceptParameters:
             logger.debug("Ticker: {}. EMA surface min ({}) if lower than the threshold ({})".format(self.stock, self.EMA_surface_min, self.config_params['trade_logic']['EMA_surface_min']), extra={'function': FUNCTION})
             result = False
 
+        '''
         number_of_crossings = self.get_number_EMA_crossings(date,logger=logger)
 
         if number_of_crossings == None:
@@ -260,6 +269,7 @@ class AcceptParameters:
                 self.stock), extra={'function': FUNCTION})
             return False
 
+        
         self.number_of_EMA_crossings = number_of_crossings
 
         if self.number_of_EMA_crossings < self.config_params['trade_logic']['number_of_EMA_crossings']:
@@ -267,10 +277,11 @@ class AcceptParameters:
                 self.stock, self.number_of_EMA_crossings, self.config_params['trade_logic']['number_of_EMA_crossings']), extra={'function': FUNCTION})
             result = False
 
-        if not self.is_overvalued():
+        if not self.is_overvalued(date):
             result = False
             logger.debug("Ticker {}. Not overvalued, not accepted.".format(
                 self.stock), extra={'function': FUNCTION})
+        '''
 
         return result
 
@@ -563,10 +574,10 @@ class Stocks(YahooAPI):
                                           "timestamp_data": "-",
                                           "description": description,
                                           "exchange": exchange,
-                                          "derivative_factor": round(params.bigEMA_derivative, 8),
-                                          "surface_factor": round(params.surface_indicator, 8),
-                                          "EMA_surface_plus": round(params.EMA_surface_plus, 8),
-                                          "EMA_surface_min": round(params.EMA_surface_min, 8),
+                                          "derivative_factor": params.bigEMA_derivative,
+                                          "surface_factor": params.surface_indicator,
+                                          "EMA_surface_plus": params.EMA_surface_plus,
+                                          "EMA_surface_min": params.EMA_surface_min,
                                           "number_of_EMA_crossings": params.number_of_EMA_crossings,
                                           "drop_period": params.drop_period,
                                           "latest_drop": params.latest_drop,
@@ -1030,6 +1041,8 @@ class Stocks(YahooAPI):
         self.plot_subplot(axes[len(gaps)],df,left=gaps[-1][1],right=last,start=start,bought=bought,sold=sold,support_level=support_level)
         fig.subplots_adjust(wspace=0.0001)
         fig.suptitle("Stock data for {}".format(stock),fontsize='xx-large')
+        handles, labels = axes[len(gaps)].get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper right')
 
         if isinstance(output_dir_plots,PurePath):
             name = output_dir_plots / "{}_{}.png".format(utils.date_now_filename(), stock)
@@ -1055,6 +1068,11 @@ class Stocks(YahooAPI):
             ax.plot(x,df.smallEMA,label="smallEMA")
         if "bigEMA" in df:
             ax.plot(x,df.bigEMA,label="bigEMA")
+        '''
+        if "simpleEMA" in df:
+            ax.plot(x,df.simpleEMA,label="simpleEMA")
+        '''
+
         if isinstance(support_level,(float,int)):
             ax.plot(x,np.full((len(x),1),support_level),label="Support Level")
 

@@ -1,10 +1,10 @@
 
-from datetime import datetime
-from backtesting import BackTesting
+from launch_backtesting import main 
+from datetime import datetime,timedelta
 
-start = datetime.strptime("2020/10/01-00:00:00",'%Y/%m/%d-%H:%M:%S')
-b = BackTesting(start,0,"price")
+start = datetime.strptime("2020/10/02-15:00:00",'%Y/%m/%d-%H:%M:%S')
+dates = [start+timedelta(days=i) for i in range(5,24)]
 
-b.get_stats_param('drop_buying',-3)
-b.get_stats_param('EMA_surface_min',-50)
-b.get_stats_param('EMA_surface_plus',50,upper_threshold=True)
+for date in dates:
+    print(date)
+    main(number=5,sell_criterium='simple',start_date=date)
