@@ -1,10 +1,14 @@
 
-from launch_backtesting import main 
+from yahoo_api import YahooAPI
 from datetime import datetime,timedelta
 
-start = datetime.strptime("2020/10/02-15:00:00",'%Y/%m/%d-%H:%M:%S')
-dates = [start+timedelta(days=i) for i in range(5,24)]
+yah = YahooAPI()
+ticker = 'MSFT'
+start = datetime(2020,10,20,0,0,0)
+end = start + timedelta(days=1)
+interval = '5m'
+period_small_EMA=3
+period_big_EMA=5
+df = yah.get_data(ticker,start,end,interval,period_small_EMA,period_big_EMA)
 
-for date in dates:
-    print(date)
-    main(number=5,sell_criterium='simple',start_date=date)
+print(df.head(40))

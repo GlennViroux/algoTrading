@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib import cm
 import shutil
 import urllib.request as request
 from contextlib import closing
@@ -1019,7 +1020,7 @@ class Stocks(YahooAPI):
             df = pd.DataFrame.from_dict(self.monitored_stock_data[ticker])
             self.plot_stock(ticker,df,output_dir_plots,logger)
 
-    def plot_stock(self,stock,df,output_dir_plots,logger,start=None,bought=None,sold=None,support_level=None):
+    def plot_stock(self,stock,df,output_dir_plots,logger,start=None,bought=None,sold_series=None):
         FUNCTION="plot_stock"
         '''
         Plot price data for one stock
@@ -1027,6 +1028,9 @@ class Stocks(YahooAPI):
         if df.empty:
             logger.debug("No valid data for monitored stock {}".format(stock), extra={'function': FUNCTION})
             return None
+
+        logger.debug("Creating plot for ticker {}".format(stock),extra={'function':FUNCTION})
+
         df = df.sort_values('timestamps')
 
         gaps = self.get_gaps(df)
@@ -1034,52 +1038,102 @@ class Stocks(YahooAPI):
         first = x.iloc[0]
         last = x.iloc[-1]
 
-        fig,axes = plt.subplots(1,len(gaps)+1,sharey=True,figsize=(20,6),dpi=200)
-        self.plot_subplot(axes[0],df,first,gaps[0][0],start=start,bought=bought,sold=sold,support_level=support_level)
+        fig,axes = plt.subplots(3,len(gaps)+1,sharey=False,sharex=False,figsize=(24,12),dpi=200,gridspec_kw={'height_ratios': [3,1,1]})
+        self.plot_subplot(axes[0,0],axes[1,0],axes[2,0],df,first,gaps[0][0],start=start,bought=bought,sold_series=sold_series,remove_yticks=False)
         for i in range(1,len(gaps)):
-            self.plot_subplot(axes[i],df,left=gaps[i-1][1],right=gaps[i][0],start=start,bought=bought,sold=sold,support_level=support_level)
-        self.plot_subplot(axes[len(gaps)],df,left=gaps[-1][1],right=last,start=start,bought=bought,sold=sold,support_level=support_level)
-        fig.subplots_adjust(wspace=0.0001)
-        fig.suptitle("Stock data for {}".format(stock),fontsize='xx-large')
-        handles, labels = axes[len(gaps)].get_legend_handles_labels()
-        fig.legend(handles, labels, loc='upper right')
-
+            self.plot_subplot(axes[0,i],axes[1,i],axes[2,i],df,left=gaps[i-1][1],right=gaps[i][0],start=start,bought=bought,sold_series=sold_series,remove_yticks=True)
+        self.plot_subplot(axes[0,len(gaps)],axes[1,len(gaps)],axes[2,len(gaps)],df,left=gaps[-1][1],right=last,start=start,bought=bought,sold_series=sold_series,remove_yticks=True)
+        fig.subplots_adjust(wspace=0.0001,hspace=0.0001)
+        fig.suptitle("Stock data for {}".format(stock),fontsize=36,y=0.94)
+        
+        handles_top, labels_top = axes[0,len(gaps)].get_legend_handles_labels()
+        handles_middle, labels_middle = axes[1,len(gaps)].get_legend_handles_labels()
+        handles_bottom, labels_bottom = axes[2,len(gaps)].get_legend_handles_labels()
+        handles = handles_top+handles_middle+handles_bottom
+        labels = labels_top+labels_middle+labels_bottom
+        fig.legend(handles, labels, loc='center right',fontsize=15)
+        
         if isinstance(output_dir_plots,PurePath):
             name = output_dir_plots / "{}_{}.png".format(utils.date_now_filename(), stock)
         else:
             name = output_dir_plots + "{}_{}.png".format(utils.date_now_filename(), stock)
-        logger.debug("Creating plot {}".format(name),extra={'function':FUNCTION})
+        
         plt.savefig(name,bbox_inches='tight')
         plt.close()
         del fig
+        logger.debug("Created plot {}".format(name),extra={'function':FUNCTION})
 
-    def plot_subplot(self,ax,df,left,right,start=None,bought=None,sold=None,support_level=None):
+    def plot_subplot(self,ax_main,ax_middle,ax_bottom,df,left,right,start=None,bought=None,sold_series=None,remove_yticks=False):
         x = pd.to_datetime(df.timestamps)
-        ax.set_xlim(left=left,right=right)
-
+        ax_main.set_xlim(left=left,right=right)
+        ax_middle.set_xlim(left=left,right=right)
+        ax_bottom.set_xlim(left=left,right=right)
+        ax_main.set_xticklabels([])
+        ax_middle.set_xticklabels([])
+        if remove_yticks:
+            ax_main.set_yticklabels([])
+            ax_middle.set_yticklabels([])
+            ax_bottom.set_yticklabels([])
+        
         if start:
-            ax.axvspan(xmin=datetime(1900,1,1),xmax=start,alpha=0.4,facecolor='tab:red')
+            ax_main.axvspan(xmin=datetime(1900,1,1),xmax=start,alpha=0.2,facecolor='tab:red')
+            ax_bottom.axvspan(xmin=datetime(1900,1,1),xmax=start,alpha=0.2,facecolor='tab:red')
+            ax_middle.axvspan(xmin=datetime(1900,1,1),xmax=start,alpha=0.2,facecolor='tab:red')
+        if bought and sold_series:
+            viridis = cm.get_cmap('viridis', 12)
+            start = bought
+            for i in range(len(sold_series)):
+                sold = sold_series[i]
+                if not sold:
+                    continue
+                ax_main.axvspan(xmin=start,xmax=sold,alpha=0.2,facecolor=viridis(i/len(sold_series)))
+                ax_bottom.axvspan(xmin=start,xmax=sold,alpha=0.2,facecolor=viridis(i/len(sold_series)))
+                ax_middle.axvspan(xmin=start,xmax=sold,alpha=0.2,facecolor=viridis(i/len(sold_series)))
 
-        if bought and sold:
-            ax.axvspan(xmin=bought,xmax=sold,alpha=0.4,facecolor='tab:olive')
 
-        ax.plot(x,df.close,label="Closes")
+        ax_main.plot(x,df.close,label="Closes")
         if "smallEMA" in df:
-            ax.plot(x,df.smallEMA,label="smallEMA")
+            ax_main.plot(x,df.smallEMA,label="smallEMA")
         if "bigEMA" in df:
-            ax.plot(x,df.bigEMA,label="bigEMA")
+            ax_main.plot(x,df.bigEMA,label="bigEMA")
+        if "advancedEMA" in df:
+            ax_main.plot(x,df.advancedEMA,label="advancedEMA")
+        
+        if "SAR" in df:
+            ax_main.scatter(x,df.SAR,label="SAR",c='tab:purple',s=5,marker="_",zorder=2)
+
         '''
-        if "simpleEMA" in df:
-            ax.plot(x,df.simpleEMA,label="simpleEMA")
+        if "slow_oscillator" in df:
+            ax_bottom.plot(x,df.slow_oscillator,label="Slow oscillator")
+        if "fast_oscillator" in df:
+            ax_bottom.plot(x,df.fast_oscillator,label="Fast oscillator")
+        ax_bottom.plot(x,np.full((len(x),1),20),c='tab:red')
+        ax_bottom.plot(x,np.full((len(x),1),80),c='tab:red')
         '''
 
-        if isinstance(support_level,(float,int)):
-            ax.plot(x,np.full((len(x),1),support_level),label="Support Level")
+        if 'MACD_histo' in df:
+            #ax_middle.bar(x,df.MACD_histo.apply(lambda x: np.nan if x<=0 else x),width=3/1000,color='tab:green',alpha=0.7,label='MACD (-)')  
+            #ax_middle.bar(x,df.MACD_histo.apply(lambda x: np.nan if x>0 else x),width=3/1000,color='tab:red',alpha=0.7,label='MACD (+)')  
+            ax_middle.fill_between(x,df.MACD_histo.apply(lambda x: np.nan if x<=0 else x),color='tab:green',label='MACD (-)')  
+            ax_middle.fill_between(x,df.MACD_histo.apply(lambda x: np.nan if x>0 else x),color='tab:red',label='MACD (+)')  
 
-        ax.grid()
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d-%H'))
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
-        ax.xaxis.set_major_locator(plt.MaxNLocator(1))
+        '''
+        if 'RSI' in df:
+            ax_bottom.plot(x,df.RSI,c='forestgreen',label="RSI")
+            ax_bottom.plot(x,np.full((len(x),1),30),c='tab:red')
+            ax_bottom.plot(x,np.full((len(x),1),70),c='tab:red')
+        '''
+        det_volume=df.volume-df.volume.mean()
+        ax_bottom.fill_between(x,det_volume.apply(lambda x: np.nan if x>=0 else x),color='sienna',label="Det. Volume (+)")
+        ax_bottom.fill_between(x,det_volume.apply(lambda x: np.nan if x<0 else x),color='seagreen',label="Det. Volume (-)")
+
+
+        ax_main.grid()
+        ax_middle.grid()
+        ax_bottom.grid()
+        ax_bottom.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d-%H'))
+        plt.setp(ax_bottom.xaxis.get_majorticklabels(), rotation=90)
+        ax_bottom.xaxis.set_major_locator(plt.MaxNLocator(4))
 
 
     def get_overview(self, logger, algo_running="Yes"):

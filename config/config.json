@@ -15,17 +15,17 @@
     "yahoo_interval": "5m",
     "yahoo_period_small_EMA": "50",
     "yahoo_period_big_EMA": "200",
-    "yahoo_period_historic_data": "10",
+    "yahoo_period_historic_data": "7",
     "number_of_big_EMAs_threshold": "300",
     "big_EMA_derivative_threshold": "0.5",
     "surface_indicator_threshold": "50",
     "EMA_surface_plus": "500",
     "EMA_surface_min": "-500",
     "number_of_EMA_crossings": "0",
-    "drop_period": "3600",
+    "drop_period": "86400",
     "drop_buying": "-3",
     "support_days": "6",
-    "support_percentage": "97"
+    "support_percentage": "0"
   },
   "logging": {
     "level_console": "DEBUG",
