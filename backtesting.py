@@ -445,7 +445,7 @@ class BackTesting(Stocks):
             eod_index = diff[diff>timedelta(hours=8)].index[0]
         eod_time = timestamps.loc[eod_index]
 
-        return (bod_time-bought).total_seconds()
+        return (eod_time-bought).total_seconds()
 
     def calculate_result(self,stock):
         FUNCTION='calculate_result'
